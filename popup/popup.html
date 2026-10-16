@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Drift</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="popup-header">
+    <div class="brand"><span class="brand-rule"></span>Drift</div>
+    <button class="icon-btn" id="settingsBtn" title="Manage topics">&#9881;</button>
+  </header>
+
+  <div class="bubble-row" id="bubbleRow" hidden>
+    <div class="bubble-copy">
+      <p class="bubble-title">Bubble is tucked away</p>
+      <p class="bubble-desc">Drag the sliver at the edge of the page back in, or bring it out here.</p>
+    </div>
+    <button class="primary-btn" id="showBubbleBtn">Bring it out</button>
+  </div>
+
+  <div class="topic-tabs" id="topicTabs" role="tablist" aria-label="Your topics"></div>
+  <main class="popup-body" id="body" role="tabpanel"></main>
+
+  <footer class="popup-footer">
+    <button class="footer-link" id="manageBtn">Manage topics</button>
+    <button class="footer-link" id="resetPosBtn" hidden>Reset bubble position</button>
+  </footer>
+
+  <script src="../shared/data.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

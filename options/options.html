@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Drift — Topics</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="page-header">
+      <div class="brand"><span class="brand-dot"></span>Drift</div>
+      <h1>What do you want to keep up with?</h1>
+      <p class="subtitle">Drift keeps two or three fresh headlines per topic, one click away on any page. Pick a few — you can change them anytime.</p>
+    </header>
+
+    <h2 class="section-title">Your topics</h2>
+    <div class="topic-grid" id="topicGrid"></div>
+
+    <section class="mode-section">
+      <h2 class="section-title">Where it lives</h2>
+      <div class="mode-grid">
+        <button class="mode-card" data-mode="bubble">
+          <span class="mode-glyph mode-glyph--bubble"></span>
+          <span class="mode-copy">
+            <span class="mode-name">Floating bubble</span>
+            <span class="mode-desc">Rides along on the page. Drag it anywhere, or past the edge to tuck it away.</span>
+          </span>
+          <span class="check">&#10003;</span>
+        </button>
+        <button class="mode-card" data-mode="toolbar">
+          <span class="mode-glyph mode-glyph--toolbar"></span>
+          <span class="mode-copy">
+            <span class="mode-name">Toolbar icon</span>
+            <span class="mode-desc">Nothing on the page. Click the Drift icon in your Chrome toolbar instead.</span>
+          </span>
+          <span class="check">&#10003;</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="daily-section">
+      <h2 class="section-title">Daily check-in</h2>
+      <div class="toggle-row">
+        <div class="toggle-copy">
+          <p class="toggle-title">Open the digest once a day</p>
+          <p class="toggle-desc">The first time you use the browser each day, Drift shows you what's new. Once a day, never more.</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="dailyToggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <p class="saved-hint" id="savedHint">Saved</p>
+  </div>
+
+  <script src="../shared/data.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
