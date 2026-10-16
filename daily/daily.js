@@ -27,7 +27,7 @@ function renderStory(article, isLead) {
   const meta = document.createElement("p");
   meta.className = "story-meta";
 
-  if (isLead) {
+  if (article.fresh) {
     const fresh = document.createElement("span");
     fresh.className = "fresh";
     fresh.textContent = "new";
@@ -92,8 +92,11 @@ function render(topicIds, articles) {
     return;
   }
 
-  const total = topics.reduce((n, topic) => n + (articles[topic.id]?.length || 0), 0);
-  greeting.textContent = total === 0 ? "Quiet morning" : "Here's what's new";
+  const fresh = topics.reduce(
+    (n, topic) => n + (articles[topic.id]?.filter((a) => a.fresh).length || 0),
+    0
+  );
+  greeting.textContent = fresh === 0 ? "A quiet one today" : "Here's what's new";
 
   topics.forEach((topic) => renderTopic(topic, articles[topic.id]));
 }

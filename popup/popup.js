@@ -51,7 +51,8 @@ function sameArticles(a, b) {
   return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
 }
 
-// The freshest story in each topic leads: larger, with an accent "new" marker.
+// isLead controls size only. The "new" marker comes from the article's own
+// freshness, so a slow topic's lead never claims to be new when it isn't.
 function renderStory(article, isLead) {
   const story = document.createElement("a");
   story.className = isLead ? "story lead" : "story";
@@ -67,7 +68,7 @@ function renderStory(article, isLead) {
   const meta = document.createElement("p");
   meta.className = "story-meta";
 
-  if (isLead) {
+  if (article.fresh) {
     const fresh = document.createElement("span");
     fresh.className = "fresh";
     fresh.textContent = "new";
@@ -90,11 +91,13 @@ function renderStories() {
 
   body.textContent = "";
 
+  // An empty topic is a real answer, not a failure — say so plainly.
   if (articles.length === 0) {
     const notice = document.createElement("div");
     notice.className = "empty-state";
     const copy = document.createElement("p");
-    copy.textContent = "Couldn't reach this topic's sources. Trying again shortly.";
+    const topic = getTopic(activeTopicId);
+    copy.textContent = "Quiet in " + (topic?.short || "this topic") + " today.";
     notice.appendChild(copy);
     body.appendChild(notice);
     return;

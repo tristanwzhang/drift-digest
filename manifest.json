@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Drift — Floating Digest",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A small bubble that floats over any page. Click it for 2-3 fresh headlines per topic you follow. Drag it anywhere, or hide it.",
   "action": {
     "default_popup": "popup/popup.html",
@@ -29,25 +29,25 @@
     }
   ],
   "host_permissions": [
-    "https://www.technologyreview.com/*",
     "https://arstechnica.com/*",
+    "https://feeds.npr.org/*",
     "https://grist.org/*",
-    "https://www.carbonbrief.org/*",
-    "https://spacenews.com/*",
-    "https://www.space.com/*",
-    "https://techcrunch.com/*",
-    "https://news.crunchbase.com/*",
-    "https://www.statnews.com/*",
-    "https://www.medicalnewstoday.com/*",
-    "https://www.polygon.com/*",
     "https://kotaku.com/*",
-    "https://www.smashingmagazine.com/*",
+    "https://news.crunchbase.com/*",
+    "https://spacenews.com/*",
+    "https://techcrunch.com/*",
     "https://uxdesign.cc/*",
-    "https://www.marketwatch.com/*",
-    "https://www.investopedia.com/*",
-    "https://www.quantamagazine.org/*",
-    "https://phys.org/*",
+    "https://www.carbonbrief.org/*",
+    "https://www.cbssports.com/*",
     "https://www.espn.com/*",
-    "https://www.cbssports.com/*"
+    "https://www.marketwatch.com/*",
+    "https://www.nerdwallet.com/*",
+    "https://www.polygon.com/*",
+    "https://www.quantamagazine.org/*",
+    "https://www.sciencenews.org/*",
+    "https://www.smashingmagazine.com/*",
+    "https://www.statnews.com/*",
+    "https://www.technologyreview.com/*",
+    "https://www.universetoday.com/*"
   ]
 }

@@ -8,6 +8,10 @@ const REFRESH_MINUTES = 30;
 // Opening it twice in a minute shouldn't hit every feed twice.
 const STALE_AFTER_MS = 5 * 60 * 1000;
 const MAX_PER_TOPIC = 3;
+// A week-old item is not "what's new" — better to show nothing than to pad.
+const MAX_AGE_HOURS = 168;
+// Only this recent earns the "new" marker.
+const FRESH_HOURS = 24;
 const FETCH_TIMEOUT_MS = 10000;
 const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
@@ -85,6 +89,84 @@ function parseFeed(xml, sourceName) {
     .filter((item) => item.title && /^https?:\/\//i.test(item.url));
 }
 
+// ---------- ranking ----------
+//
+// Sorting purely by timestamp surfaces filler: a wallpapers post outranks real
+// news just by being newer, and a week-old item leads a slow topic while
+// wearing a "new" badge. So: drop the stale, then let agreement between
+// independent sources decide what matters.
+
+const STOP_WORDS = new Set([
+  "about", "after", "again", "against", "could", "every", "from", "have",
+  "into", "more", "most", "nach", "over", "said", "says", "some", "such",
+  "than", "that", "their", "them", "then", "there", "these", "they", "this",
+  "were", "what", "when", "where", "which", "while", "will", "with", "would",
+  "your", "been", "being", "just", "like", "make", "made", "much", "only",
+  "other", "still", "take", "very", "year", "years",
+]);
+
+function titleTokens(title) {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 3 && !STOP_WORDS.has(word))
+  );
+}
+
+// Jaccard overlap — same story from two outlets shares most of its nouns.
+function similarity(a, b) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  a.forEach((word) => {
+    if (b.has(word)) shared += 1;
+  });
+  return shared / (a.size + b.size - shared);
+}
+
+const SAME_STORY = 0.45;
+
+function ageHours(isoDate) {
+  return (Date.now() - new Date(isoDate).getTime()) / 3.6e6;
+}
+
+// Collapse the same story reported by several sources into one item, and
+// remember how many sources carried it — agreement is the strongest signal
+// we can get without a model.
+function cluster(items) {
+  const clusters = [];
+
+  for (const item of items) {
+    const tokens = titleTokens(item.title);
+    const match = clusters.find((c) => similarity(c.tokens, tokens) >= SAME_STORY);
+
+    if (match) {
+      match.sources.add(item.source);
+      // keep the earliest report; it's usually the one that broke it
+      if (new Date(item.publishedAt) < new Date(match.item.publishedAt)) {
+        match.item = item;
+      }
+    } else {
+      clusters.push({ item, tokens, sources: new Set([item.source]) });
+    }
+  }
+
+  return clusters.map((c) => ({
+    ...c.item,
+    corroboration: c.sources.size,
+    fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
+  }));
+}
+
+function rank(items) {
+  return cluster(items).sort((a, b) => {
+    // stories two outlets both covered lead over a single outlet's
+    if (b.corroboration !== a.corroboration) return b.corroboration - a.corroboration;
+    return new Date(b.publishedAt) - new Date(a.publishedAt);
+  });
+}
+
 // ---------- fetching ----------
 
 async function fetchFeed(feed) {
@@ -111,15 +193,15 @@ async function fetchTopic(topic) {
   const results = await Promise.all(topic.feeds.map(fetchFeed));
   const seen = new Set();
 
-  return results
-    .flat()
-    .filter((item) => {
-      if (seen.has(item.url)) return false;
-      seen.add(item.url);
-      return true;
-    })
-    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-    .slice(0, MAX_PER_TOPIC);
+  const fresh = results.flat().filter((item) => {
+    if (seen.has(item.url)) return false;
+    seen.add(item.url);
+    return ageHours(item.publishedAt) <= MAX_AGE_HOURS;
+  });
+
+  // Deliberately may return fewer than MAX_PER_TOPIC, including none:
+  // an honest quiet day beats three pieces of filler.
+  return rank(fresh).slice(0, MAX_PER_TOPIC);
 }
 
 // Concurrent callers share one fetch rather than each starting their own.
@@ -155,9 +237,11 @@ async function doRefresh() {
   const topics = selected.map(getTopic).filter(Boolean);
   const fetched = await Promise.all(topics.map(fetchTopic));
 
+  // Keep empty topics in the map — "quiet today" is a real answer, and
+  // dropping the key would make the panel think the fetch failed.
   const articles = {};
   topics.forEach((topic, index) => {
-    if (fetched[index].length > 0) articles[topic.id] = fetched[index];
+    articles[topic.id] = fetched[index];
   });
 
   await chrome.storage.local.set({ articles, fetched_at: Date.now() });

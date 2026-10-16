@@ -679,8 +679,9 @@
     return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
   }
 
-  // The freshest story in each topic leads: larger, with an accent "new" marker.
-  function renderStory(article, isLead, isUnread) {
+  // isLead controls size only. The "new" marker comes from the article's own
+  // freshness, so a slow topic's lead never claims to be new when it isn't.
+  function renderStory(article, isLead) {
     const story = document.createElement("a");
     story.className = isLead ? "story lead" : "story";
     story.href = article.url;
@@ -695,7 +696,7 @@
     const meta = document.createElement("p");
     meta.className = "story-meta";
 
-    if (isLead && isUnread) {
+    if (article.fresh) {
       const fresh = document.createElement("span");
       fresh.className = "fresh";
       fresh.textContent = "new";
@@ -715,22 +716,23 @@
 
   function renderStories() {
     const articles = articlesByTopic[activeTopicId] || [];
-    const wasUnread = unreadTopics.has(activeTopicId);
 
     panelBody.textContent = "";
 
+    // An empty topic is a real answer, not a failure — say so plainly.
     if (articles.length === 0) {
       const notice = document.createElement("div");
       notice.className = "empty-state";
       const copy = document.createElement("p");
-      copy.textContent = "Couldn't reach this topic's sources. Trying again shortly.";
+      const topic = getTopic(activeTopicId);
+      copy.textContent = "Quiet in " + (topic?.short || "this topic") + " today.";
       notice.appendChild(copy);
       panelBody.appendChild(notice);
       return;
     }
 
     articles.forEach((article, index) => {
-      panelBody.appendChild(renderStory(article, index === 0, wasUnread));
+      panelBody.appendChild(renderStory(article, index === 0));
     });
 
     // replay the fade so switching tabs reads as a change
@@ -825,7 +827,9 @@
 
     if (Object.keys(previousArticles).length === 0) {
       // first load — everything is new
-      unreadTopics = new Set(selectedTopics.filter((id) => articlesByTopic[id]?.length));
+      unreadTopics = new Set(
+        selectedTopics.filter((id) => articlesByTopic[id]?.some((a) => a.fresh))
+      );
     } else {
       // a refresh only marks the topics whose stories actually changed
       selectedTopics.forEach((id) => {

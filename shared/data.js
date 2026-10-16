@@ -32,7 +32,7 @@ const NEWSLETTER_TOPICS = [
     emoji: "🚀",
     feeds: [
       { url: "https://spacenews.com/feed/", name: "SpaceNews" },
-      { url: "https://www.space.com/feeds/all", name: "Space.com" },
+      { url: "https://www.universetoday.com/feed/", name: "Universe Today" },
     ],
   },
   {
@@ -52,7 +52,7 @@ const NEWSLETTER_TOPICS = [
     emoji: "🧬",
     feeds: [
       { url: "https://www.statnews.com/feed/", name: "STAT News" },
-      { url: "https://www.medicalnewstoday.com/rss", name: "Medical News Today" },
+      { url: "https://feeds.npr.org/1128/rss.xml", name: "NPR Health" },
     ],
   },
   {
@@ -82,7 +82,7 @@ const NEWSLETTER_TOPICS = [
     emoji: "💰",
     feeds: [
       { url: "https://www.marketwatch.com/rss/topstories", name: "MarketWatch" },
-      { url: "https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=rss_headline", name: "Investopedia" },
+      { url: "https://www.nerdwallet.com/blog/feed/", name: "NerdWallet" },
     ],
   },
   {
@@ -92,7 +92,7 @@ const NEWSLETTER_TOPICS = [
     emoji: "🔬",
     feeds: [
       { url: "https://www.quantamagazine.org/feed/", name: "Quanta Magazine" },
-      { url: "https://phys.org/rss-feed/", name: "Phys.org" },
+      { url: "https://www.sciencenews.org/feed", name: "Science News" },
     ],
   },
   {
