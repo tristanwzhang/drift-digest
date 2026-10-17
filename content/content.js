@@ -322,6 +322,52 @@
     }
     .story.lead .story-title { font-size: 17px; line-height: 1.42; margin-bottom: 8px; }
 
+    .story-wrap { display: block; }
+
+    .story-sources {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 0 18px 12px;
+      margin-top: -3px;
+    }
+    .sources-label {
+      font-family: var(--code);
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .source-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 3px 6px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      box-shadow: inset 0 0 0 1px var(--hairline);
+      text-decoration: none;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      transition: color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .source-chip:hover {
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px var(--accent-dim);
+    }
+    .source-chip:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .source-chip img {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      object-fit: contain;
+    }
+
     .story-lead {
       margin: 0 0 8px;
       font-family: var(--sans);
@@ -700,6 +746,41 @@
     return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
   }
 
+  // One story, several outlets: pick who you'd rather read it from.
+  function coverageRow(others) {
+    const row = document.createElement("div");
+    row.className = "story-sources";
+
+    const label = document.createElement("span");
+    label.className = "sources-label";
+    label.textContent = "also in";
+    row.appendChild(label);
+
+    for (const other of others) {
+      const chip = document.createElement("a");
+      chip.className = "source-chip";
+      chip.href = other.url;
+      chip.target = "_blank";
+      chip.rel = "noopener noreferrer";
+      chip.addEventListener("click", () => {
+        chrome.runtime.sendMessage({ type: "MARK_OPENED", url: other.url });
+      });
+
+      const icon = document.createElement("img");
+      icon.src = sourceIconUrl(other.source);
+      icon.alt = "";
+      icon.addEventListener("error", () => icon.remove());
+
+      const name = document.createElement("span");
+      name.textContent = other.source;
+
+      chip.append(icon, name);
+      row.appendChild(chip);
+    }
+
+    return row;
+  }
+
   // isLead controls size only. The "new" marker comes from the article's own
   // freshness, so a slow topic's lead never claims to be new when it isn't.
   function renderStory(article, isLead) {
@@ -753,7 +834,16 @@
     meta.append(mark, source, separator(), time);
     if (!article.summary) story.appendChild(headline);
     story.appendChild(meta);
-    return story;
+
+    const others = (article.coverage || []).filter((c) => c.source !== article.source);
+    if (!others.length) return story;
+
+    // Anchors can't nest, so the other outlets sit beside the story card.
+    const wrap = document.createElement("div");
+    wrap.className = "story-wrap";
+    wrap.appendChild(story);
+    wrap.appendChild(coverageRow(others));
+    return wrap;
   }
 
   function renderStories() {

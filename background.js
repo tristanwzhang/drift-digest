@@ -15,6 +15,8 @@ const STALE_AFTER_MS = 5 * 60 * 1000;
 const TOPIC_STALE_AFTER_MS = 60 * 1000;
 // Per-feed item cache, so a 304 can be answered from memory.
 const CACHE_PER_FEED = 15;
+// How many outlets to offer for one story before it stops being useful.
+const MAX_SOURCES_PER_STORY = 5;
 const MAX_PER_TOPIC = 3;
 // The cache holds more than it shows, so each surface can skip what you've
 // already seen without going back to the network.
@@ -225,6 +227,7 @@ function cluster(items) {
     if (match) {
       match.sources.add(item.source);
       match.topics.push(item.topicId);
+      match.members.push(item);
       // keep the earliest report; it's usually the one that broke it
       if (new Date(item.publishedAt) < new Date(match.item.publishedAt)) {
         match.item = item;
@@ -235,16 +238,41 @@ function cluster(items) {
         tokens,
         sources: new Set([item.source]),
         topics: [item.topicId],
+        members: [item],
       });
     }
   });
 
-  return clusters.map((c) => ({
-    ...c.item,
-    corroboration: c.sources.size,
-    fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
-    topics: c.topics,
-  }));
+  return clusters.map((c) => {
+    // One row per outlet, newest first, so the reader can pick who to read it
+    // from rather than being handed whichever copy we happened to keep.
+    const bySource = new Map();
+    for (const member of c.members) {
+      const existing = bySource.get(member.source);
+      if (!existing || new Date(member.publishedAt) > new Date(existing.publishedAt)) {
+        bySource.set(member.source, member);
+      }
+    }
+
+    const coverage = [...bySource.values()]
+      .sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt))
+      .slice(0, MAX_SOURCES_PER_STORY)
+      .map((member) => ({ source: member.source, url: member.url }));
+
+    // The earliest report leads, but if it shipped no summary, borrow one
+    // from another outlet rather than showing a bare headline.
+    const summary =
+      c.item.summary || c.members.find((member) => member.summary)?.summary || "";
+
+    return {
+      ...c.item,
+      summary,
+      corroboration: c.sources.size,
+      fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
+      topics: c.topics,
+      coverage: coverage.length > 1 ? coverage : undefined,
+    };
+  });
 }
 
 function rank(items) {

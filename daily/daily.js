@@ -18,23 +18,63 @@ function separator() {
   return dot;
 }
 
+// One story, several outlets: pick who you'd rather read it from.
+function coverageRow(others) {
+  const row = document.createElement("div");
+  row.className = "story-sources";
+
+  const label = document.createElement("span");
+  label.className = "sources-label";
+  label.textContent = "also in";
+  row.appendChild(label);
+
+  for (const other of others) {
+    const chip = document.createElement("a");
+    chip.className = "source-chip";
+    chip.href = other.url;
+    chip.target = "_blank";
+    chip.rel = "noopener noreferrer";
+    chip.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "MARK_OPENED", url: other.url });
+    });
+
+    const icon = document.createElement("img");
+    icon.src = sourceIconUrl(other.source);
+    icon.alt = "";
+    icon.addEventListener("error", () => icon.remove());
+
+    const name = document.createElement("span");
+    name.textContent = other.source;
+
+    chip.append(icon, name);
+    row.appendChild(chip);
+  }
+
+  return row;
+}
+
+// isLead controls size only. The "new" marker comes from the article's own
+// freshness, so a slow topic's lead never claims to be new when it isn't.
 function renderStory(article, isLead) {
   const story = document.createElement("a");
   story.className = isLead ? "story lead" : "story";
   story.href = article.url;
   story.target = "_blank";
   story.rel = "noopener noreferrer";
+  story.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
+  });
 
   const headline = document.createElement("p");
   headline.className = "story-title";
   headline.textContent = article.title;
+  story.appendChild(headline);
 
   // Not every feed ships one — Hacker News, for instance, has nothing useful.
   if (article.summary) {
     const lead = document.createElement("p");
     lead.className = "story-lead";
     lead.textContent = article.summary;
-    story.appendChild(headline);
     story.appendChild(lead);
   }
 
@@ -47,10 +87,6 @@ function renderStory(article, isLead) {
     fresh.textContent = "new";
     meta.append(fresh, separator());
   }
-
-  story.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
-  });
 
   const mark = document.createElement("img");
   mark.className = "story-favicon";
@@ -65,9 +101,18 @@ function renderStory(article, isLead) {
   const when = document.createElement("span");
   when.textContent = timeAgo(article.publishedAt);
 
-  meta.append(source, separator(), when);
-  story.append(headline, meta);
-  return story;
+  meta.append(mark, source, separator(), when);
+  story.appendChild(meta);
+
+  const others = (article.coverage || []).filter((c) => c.source !== article.source);
+  if (!others.length) return story;
+
+  // Anchors can't nest, so the other outlets sit beside the story card.
+  const wrap = document.createElement("div");
+  wrap.className = "story-wrap";
+  wrap.appendChild(story);
+  wrap.appendChild(coverageRow(others));
+  return wrap;
 }
 
 function renderTopic(topic, pool) {
