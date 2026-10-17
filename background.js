@@ -18,6 +18,7 @@ const FRESH_HOURS = 24;
 const FETCH_TIMEOUT_MS = 10000;
 const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
+const BUBBLE_SCRIPT_ID = "drift-bubble";
 
 // ---------- a small RSS/Atom reader ----------
 // MV3 service workers have no DOM, so DOMParser isn't available here.
@@ -310,7 +311,15 @@ async function doRefresh() {
     selected_topics: DEFAULT_TOPIC_IDS,
   });
 
-  const topics = selected.map(getTopic).filter(Boolean);
+  const all = selected.map(getTopic).filter(Boolean);
+
+  // A topic whose feeds haven't been granted access is skipped rather than
+  // failing noisily — the UI asks for the permission instead.
+  const checks = await Promise.all(
+    all.map((topic) => hasOrigins(originsForTopics([topic.id])))
+  );
+  const topics = all.filter((_, index) => checks[index]);
+
   const fetched = await Promise.all(topics.map(fetchTopicItems));
 
   const order = topics.map((topic) => topic.id);
@@ -321,6 +330,9 @@ async function doRefresh() {
   // A pool rather than exactly three: the surfaces trim it against what
   // you've already seen.
   const articles = {};
+  selected.forEach((id) => {
+    articles[id] = [];
+  });
   order.forEach((id) => {
     articles[id] = (grouped[id] || [])
       .slice(0, POOL_PER_TOPIC)
@@ -331,6 +343,51 @@ async function doRefresh() {
 
   await chrome.storage.local.set({ articles, fetched_at: Date.now() });
   return articles;
+}
+
+// ---------- host access ----------
+
+async function hasOrigins(origins) {
+  if (!origins.length) return true;
+  try {
+    return await chrome.permissions.contains({ origins });
+  } catch (error) {
+    return false;
+  }
+}
+
+// The floating bubble needs to run on every page, which is a big ask. It is
+// registered only once the user has actually turned it on and granted access,
+// so a toolbar-only install never requests page access at all.
+async function syncBubbleScript() {
+  const [{ display_mode: mode }, allowed] = await Promise.all([
+    chrome.storage.sync.get({ display_mode: DEFAULT_DISPLAY_MODE }),
+    hasOrigins(["<all_urls>"]),
+  ]);
+
+  let registered = [];
+  try {
+    registered = await chrome.scripting.getRegisteredContentScripts({
+      ids: [BUBBLE_SCRIPT_ID],
+    });
+  } catch (error) {
+    registered = [];
+  }
+
+  const wanted = mode === "bubble" && allowed;
+
+  if (wanted && registered.length === 0) {
+    await chrome.scripting.registerContentScripts([{
+      id: BUBBLE_SCRIPT_ID,
+      matches: ["<all_urls>"],
+      js: ["shared/data.js", "content/content.js"],
+      runAt: "document_idle",
+      allFrames: false,
+      persistAcrossSessions: true,
+    }]);
+  } else if (!wanted && registered.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [BUBBLE_SCRIPT_ID] });
+  }
 }
 
 // ---------- reading history ----------
@@ -439,15 +496,20 @@ function scheduleRefresh() {
   chrome.alarms.create(ALARM, { periodInMinutes: REFRESH_MINUTES });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   scheduleRefresh();
   refresh();
+  syncBubbleScript();
+  // Nothing has been granted yet on a fresh install, so send people somewhere
+  // that explains the product and asks for what it needs.
+  if (details.reason === "install") chrome.runtime.openOptionsPage();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   scheduleRefresh();
   refresh();
   maybeShowDaily();
+  syncBubbleScript();
 });
 
 // A focused window or a tab switch means someone is actually at the keyboard —
@@ -469,7 +531,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Following a new topic should fill it in right away, not at the next alarm.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes.selected_topics) refresh();
+  if (area !== "sync") return;
+  if (changes.selected_topics) refresh();
+  if (changes.display_mode) syncBubbleScript();
+});
+
+// Granting or revoking host access changes what we can fetch and whether the
+// bubble may run, so react to both.
+chrome.permissions.onAdded.addListener(() => {
+  syncBubbleScript();
+  refresh();
+});
+chrome.permissions.onRemoved.addListener(() => {
+  syncBubbleScript();
+  refresh();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

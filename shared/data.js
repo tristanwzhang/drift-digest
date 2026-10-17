@@ -128,6 +128,24 @@ const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";
 
+// Host access is requested per topic rather than up front, so installing the
+// extension asks for nothing. These are the origins a topic's feeds need.
+function originsForTopics(topicIds) {
+  const origins = new Set();
+  for (const id of topicIds || []) {
+    const topic = getTopic(id);
+    if (!topic) continue;
+    for (const feed of topic.feeds) {
+      try {
+        origins.add(new URL(feed.url).origin + "/*");
+      } catch (error) {
+        // a malformed feed URL shouldn't take the whole request down
+      }
+    }
+  }
+  return [...origins];
+}
+
 // How many times a story can sit in front of you, unclicked, before it steps
 // aside for something newer. Not zero: glancing past something once shouldn't
 // bury it.

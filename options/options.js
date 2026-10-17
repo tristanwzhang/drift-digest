@@ -4,8 +4,25 @@ const modeCards = Array.from(document.querySelectorAll(".mode-card"));
 const dailyToggle = document.getElementById("dailyToggle");
 
 let selectedTopics = new Set();
-let displayMode = "bubble";
+let displayMode = DEFAULT_DISPLAY_MODE;
 let savedHintTimer = null;
+let noticeTimer = null;
+
+// Access to each publisher is requested when a topic is picked, not at
+// install — so the install prompt asks for nothing at all.
+function showNotice(text) {
+  let notice = document.getElementById("permNotice");
+  if (!notice) {
+    notice = document.createElement("p");
+    notice.id = "permNotice";
+    notice.className = "perm-notice";
+    document.querySelector(".wrap").appendChild(notice);
+  }
+  notice.textContent = text;
+  notice.classList.add("is-visible");
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => notice.classList.remove("is-visible"), 6000);
+}
 
 function showSavedHint() {
   savedHint.classList.add("is-visible");
@@ -36,7 +53,27 @@ function renderModes() {
 
 modeCards.forEach((card) => {
   card.addEventListener("click", () => {
-    displayMode = card.dataset.mode;
+    const mode = card.dataset.mode;
+
+    // The bubble draws on every page, so it needs access to every page.
+    // That's a big ask, and it's only made if someone actually chooses it.
+    if (mode === "bubble") {
+      chrome.permissions.request({ origins: ["<all_urls>"] }, (granted) => {
+        if (!granted) {
+          showNotice(
+            "The floating bubble has to draw on the pages you visit, so it needs " +
+            "access to them. Toolbar mode needs nothing."
+          );
+          return;
+        }
+        displayMode = mode;
+        renderModes();
+        persist();
+      });
+      return;
+    }
+
+    displayMode = mode;
     renderModes();
     persist();
   });
@@ -66,11 +103,28 @@ function renderGrid() {
     chip.addEventListener("click", () => {
       if (selectedTopics.has(topic.id)) {
         selectedTopics.delete(topic.id);
-      } else {
-        selectedTopics.add(topic.id);
+        renderGrid();
+        persist();
+        return;
       }
-      renderGrid();
-      persist();
+
+      // request() must be the first thing in the handler — awaiting anything
+      // first loses the user gesture and Chrome refuses the prompt.
+      chrome.permissions.request(
+        { origins: originsForTopics([topic.id]) },
+        (granted) => {
+          if (!granted) {
+            showNotice(
+              `Drift needs access to ${topic.label}'s sources to fetch its headlines. ` +
+              `Nothing is read from any other site.`
+            );
+            return;
+          }
+          selectedTopics.add(topic.id);
+          renderGrid();
+          persist();
+        }
+      );
     });
 
     topicGrid.appendChild(chip);

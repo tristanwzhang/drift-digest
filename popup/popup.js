@@ -181,6 +181,26 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
   if (readingHistory) history = readingHistory;
   selectedTopics = (topicIds || []).filter((id) => getTopic(id));
 
+  // On a fresh install nothing has been granted yet, so there is no cache and
+  // no way to build one. Say that plainly instead of spinning on "Gathering".
+  const everythingEmpty =
+    selectedTopics.length > 0 &&
+    selectedTopics.every((id) => !(articlesByTopic[id] || []).length);
+
+  if (everythingEmpty) {
+    chrome.permissions.contains(
+      { origins: originsForTopics(selectedTopics) },
+      (granted) => {
+        if (!granted) {
+          showNotice(
+            "Drift needs access to your topics' sources before it can fetch anything.",
+            "Grant access"
+          );
+        }
+      }
+    );
+  }
+
   if (selectedTopics.length === 0) {
     activeTopicId = null;
     showNotice(
