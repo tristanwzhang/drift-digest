@@ -566,9 +566,9 @@
     if (open) {
       tickClock();
       placePanel();
-      // Fresh on every open, without re-fetching on rapid re-opens —
-      // the worker decides whether the cache is stale enough to warrant it.
-      chrome.runtime.sendMessage({ type: "REFRESH_IF_STALE" });
+      // Fresh on every open: the tab in front of you is refetched if its own
+      // feeds have gone stale, which is far cheaper than refreshing all of them.
+      refreshActiveTopic();
     }
   }
 
@@ -796,6 +796,18 @@
     renderTabs();
     renderStories();
     updateBadge();
+    refreshActiveTopic();
+  }
+
+  // Refetch just the tab you're looking at — a few requests, not all 35.
+  function refreshActiveTopic() {
+    const topicId = activeTopicId;
+    chrome.runtime.sendMessage({ type: "REFRESH_TOPIC", topicId }, (reply) => {
+      if (chrome.runtime.lastError || !reply?.articles) return;
+      if (topicId !== activeTopicId) return;
+      if (sameArticles(reply.articles, articlesByTopic)) return;
+      render(selectedTopics, reply.articles);
+    });
   }
 
   function renderTabs() {

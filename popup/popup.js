@@ -167,6 +167,20 @@ function selectTopic(topicId) {
   chrome.storage.local.set({ active_topic: topicId });
   renderTabs();
   renderStories();
+  refreshActiveTopic();
+}
+
+// Refetch just the tab you're looking at — a few requests, not all 35.
+function refreshActiveTopic() {
+  const topicId = activeTopicId;
+  chrome.runtime.sendMessage({ type: "REFRESH_TOPIC", topicId }, (reply) => {
+    if (chrome.runtime.lastError || !reply?.articles) return;
+    if (topicId !== activeTopicId) return;            // user moved on
+    if (sameArticles(reply.articles, articlesByTopic)) return;
+    articlesByTopic = reply.articles;
+    renderTabs();
+    renderStories();
+  });
 }
 
 function renderTabs() {
@@ -262,6 +276,7 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
 
   renderTabs();
   renderStories();
+  refreshActiveTopic();
 }
 
 chrome.storage.sync.get(

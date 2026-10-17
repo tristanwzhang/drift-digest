@@ -6,7 +6,15 @@ importScripts("shared/data.js");
 const REFRESH_MINUTES = 30;
 // How stale the cache may be before opening the panel triggers a fetch.
 // Opening it twice in a minute shouldn't hit every feed twice.
+// Measured against our own feeds: only about 1 in 8 publishers honours
+// If-None-Match. The rest return a full 200 regardless, so a refresh costs
+// real bandwidth and this threshold has to stay conservative.
 const STALE_AFTER_MS = 5 * 60 * 1000;
+// Refreshing just the topic you're reading is ~4 requests instead of ~35,
+// which is cheap enough to do whenever you open or switch tabs.
+const TOPIC_STALE_AFTER_MS = 60 * 1000;
+// Per-feed item cache, so a 304 can be answered from memory.
+const CACHE_PER_FEED = 15;
 const MAX_PER_TOPIC = 3;
 // The cache holds more than it shows, so each surface can skip what you've
 // already seen without going back to the network.
@@ -249,32 +257,66 @@ function rank(items) {
 
 // ---------- fetching ----------
 
-async function fetchFeed(feed) {
+// Validators and parsed items from the last fetch of each feed, so an
+// unchanged feed costs one 304 and no parsing.
+async function readFeedCache() {
+  const { feed_cache: cache } = await chrome.storage.local.get({ feed_cache: {} });
+  return cache;
+}
+
+async function fetchFeed(feed, cache) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const previous = cache[feed.url];
+
+  const headers = {};
+  if (previous?.etag) headers["If-None-Match"] = previous.etag;
+  if (previous?.lastModified) headers["If-Modified-Since"] = previous.lastModified;
 
   try {
-    const response = await fetch(feed.url, {
-      signal: controller.signal,
-      cache: "no-cache",
-    });
+    const response = await fetch(feed.url, { signal: controller.signal, headers });
+
+    // Nothing new since last time — the publisher sent no body at all.
+    if (response.status === 304 && previous?.items) {
+      return { items: previous.items, entry: previous, changed: false };
+    }
+
     if (!response.ok) throw new Error("HTTP " + response.status);
-    return parseFeed(await response.text(), feed.name);
+
+    const items = parseFeed(await response.text(), feed.name);
+    return {
+      items,
+      entry: {
+        etag: response.headers.get("ETag") || null,
+        lastModified: response.headers.get("Last-Modified") || null,
+        items: items.slice(0, CACHE_PER_FEED),
+      },
+      changed: true,
+    };
   } catch (error) {
-    // One dead feed shouldn't empty a topic — log it and move on.
+    // One dead feed shouldn't empty a topic. Fall back to whatever we had.
     console.warn("[Drift] feed failed:", feed.url, error.message);
-    return [];
+    return { items: previous?.items || [], entry: previous, changed: false };
   } finally {
     clearTimeout(timer);
   }
 }
 
 // Raw items for one topic, tagged so clustering can run across all of them.
-async function fetchTopicItems(topic) {
-  const results = await Promise.all(topic.feeds.map(fetchFeed));
+async function fetchTopicItems(topic, cache, nextCache, skipNetwork) {
+  // Clustering runs across every topic, so a single-topic refresh still needs
+  // the others' items — it just takes them from cache instead of the network.
+  const results = skipNetwork
+    ? topic.feeds.map((feed) => ({ items: cache[feed.url]?.items || [], entry: cache[feed.url], changed: false }))
+    : await Promise.all(topic.feeds.map((feed) => fetchFeed(feed, cache)));
+
+  topic.feeds.forEach((feed, index) => {
+    if (results[index].entry) nextCache[feed.url] = results[index].entry;
+  });
+
   const seen = new Set();
 
-  return results.flat().filter((item) => {
+  return results.flatMap((result) => result.items).filter((item) => {
     if (seen.has(item.url)) return false;
     seen.add(item.url);
     item.topicId = topic.id;
@@ -314,16 +356,34 @@ function assignToTopics(clusters, topicOrder) {
   return byTopic;
 }
 
-// Concurrent callers share one fetch rather than each starting their own.
-let inFlight = null;
+async function topicStamps() {
+  const { topic_fetched_at: stamps } = await chrome.storage.local.get({ topic_fetched_at: {} });
+  return stamps;
+}
 
-function refresh() {
-  if (!inFlight) {
-    inFlight = doRefresh().finally(() => {
-      inFlight = null;
-    });
+// Concurrent callers share one fetch rather than each starting their own.
+// Keyed so a single-topic refresh doesn't get handed a full refresh's promise.
+const inFlight = new Map();
+
+function refresh(only) {
+  const key = only || "*";
+  if (!inFlight.has(key)) {
+    inFlight.set(key, doRefresh(only).finally(() => inFlight.delete(key)));
   }
-  return inFlight;
+  return inFlight.get(key);
+}
+
+// Called when a surface opens or switches tabs: refetches just that topic if
+// its own feeds have gone stale.
+async function refreshTopicIfStale(topicId) {
+  if (!topicId || !getTopic(topicId)) return null;
+
+  const stamps = await topicStamps();
+  const { fetched_at: wholeCache } = await chrome.storage.local.get({ fetched_at: 0 });
+  const last = Math.max(stamps[topicId] || 0, wholeCache);
+
+  if (Date.now() - last < TOPIC_STALE_AFTER_MS) return null;
+  return refresh(topicId);
 }
 
 // Refresh only if the cache has gone stale — this is what the panel calls
@@ -339,7 +399,7 @@ async function refreshIfStale() {
   return articles;
 }
 
-async function doRefresh() {
+async function doRefresh(only) {
   const { selected_topics: selected } = await chrome.storage.sync.get({
     selected_topics: DEFAULT_TOPIC_IDS,
   });
@@ -353,7 +413,13 @@ async function doRefresh() {
   );
   const topics = all.filter((_, index) => checks[index]);
 
-  const fetched = await Promise.all(topics.map(fetchTopicItems));
+  const cache = await readFeedCache();
+  const nextCache = {};
+  const fetched = await Promise.all(
+    topics.map((topic) =>
+      fetchTopicItems(topic, cache, nextCache, Boolean(only) && topic.id !== only)
+    )
+  );
 
   const order = topics.map((topic) => topic.id);
   const grouped = assignToTopics(rank(fetched.flat()), order);
@@ -374,7 +440,13 @@ async function doRefresh() {
       .map(({ topics, ...article }) => article);
   });
 
-  await chrome.storage.local.set({ articles, fetched_at: Date.now() });
+  const stamp = { articles, feed_cache: nextCache };
+  // A single-topic refresh doesn't make the whole cache fresh.
+  if (!only) stamp.fetched_at = Date.now();
+  else stamp.topic_fetched_at = { ...(await topicStamps()), [only]: Date.now() };
+
+  await chrome.storage.local.set(stamp);
+  await updateBadge(articles);
   return articles;
 }
 
@@ -450,6 +522,7 @@ async function markSeen(urls) {
   }
 
   await chrome.storage.local.set({ seen_urls: prune(seen) });
+  await updateBadge();
 }
 
 async function markOpened(url) {
@@ -457,6 +530,42 @@ async function markOpened(url) {
   const { opened_urls: opened } = await chrome.storage.local.get({ opened_urls: {} });
   opened[url] = { t: Date.now() };
   await chrome.storage.local.set({ opened_urls: prune(opened) });
+  await updateBadge();
+}
+
+// ---------- what's actually worth your attention ----------
+//
+// "Fresh" alone isn't enough: a story you already opened isn't news to you.
+// This counts topics holding something both recent and unread, and is the
+// basis for both the toolbar badge and whether the daily check-in fires.
+
+async function unreadTopicCount(articles) {
+  const [{ selected_topics: selected }, local] = await Promise.all([
+    chrome.storage.sync.get({ selected_topics: DEFAULT_TOPIC_IDS }),
+    chrome.storage.local.get({ opened_urls: {}, seen_urls: {} }),
+  ]);
+
+  const history = { opened: local.opened_urls, seen: local.seen_urls };
+
+  let count = 0;
+  for (const id of selected) {
+    const picked = pickStories(articles[id], history, 3);
+    if (picked.some((article) => article.fresh)) count += 1;
+  }
+  return count;
+}
+
+async function updateBadge(articles) {
+  const source = articles || (await chrome.storage.local.get({ articles: {} })).articles;
+  const count = await unreadTopicCount(source);
+
+  try {
+    await chrome.action.setBadgeText({ text: count ? String(count) : "" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#C7A97B" });
+    await chrome.action.setBadgeTextColor({ color: "#2A2418" });
+  } catch (error) {
+    // badge APIs are best-effort; never let them break a refresh
+  }
 }
 
 // ---------- the once-a-day check-in ----------
@@ -503,7 +612,7 @@ function maybeShowDaily() {
 
 async function runDailyCheck() {
   const today = todayKey();
-  if (checkedDate === today) return;
+  if (checkedDate === today) return;   // only set once we've actually opened
 
   const { daily_open: enabled } = await chrome.storage.sync.get({ daily_open: true });
   if (!enabled) {
@@ -517,14 +626,31 @@ async function runDailyCheck() {
     return;
   }
 
+  // Don't re-evaluate on every tab switch for the rest of a quiet day.
+  const { daily_quiet_until: quietUntil } = await chrome.storage.local.get({
+    daily_quiet_until: 0,
+  });
+  if (Date.now() < quietUntil) return;
+
+  const articles = await refreshIfStale();
+  const worthIt = await unreadTopicCount(articles);
+
+  // Nothing recent and unread. Interrupting someone to show them what they
+  // already read is how this feature gets switched off, so stay quiet — and
+  // deliberately don't claim the day, so it can still fire when news lands.
+  if (worthIt === 0) {
+    await chrome.storage.local.set({ daily_quiet_until: Date.now() + 30 * 60 * 1000 });
+    console.log("[Drift] daily check-in skipped — nothing new worth opening for");
+    return;
+  }
+
   // Claim today before doing anything slow, so two triggers firing at once
   // can't both decide they're first.
-  await chrome.storage.local.set({ [DAILY_KEY]: today });
+  await chrome.storage.local.set({ [DAILY_KEY]: today, daily_quiet_until: 0 });
   checkedDate = today;
 
-  await refreshIfStale();
   const how = await openDigest();
-  console.log("[Drift] daily check-in shown via", how);
+  console.log(`[Drift] daily check-in shown via ${how} (${worthIt} topics with news)`);
 }
 
 // ---------- schedule ----------
@@ -603,6 +729,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "MARK_OPENED") {
     markOpened(message.url);
     return false;
+  }
+
+  if (message?.type === "REFRESH_TOPIC") {
+    refreshTopicIfStale(message.topicId).then((articles) => sendResponse({ articles }));
+    return true;
   }
 
   if (message?.type === "REFRESH_IF_STALE") {
