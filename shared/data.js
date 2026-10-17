@@ -128,6 +128,40 @@ const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";
 
+// Drift can open itself unprompted once a day. A digest that greets someone
+// that way with a headline about child abuse or a massacre is a different
+// product from the one described on the listing page — so the automatic
+// surface holds those back behind one click. Surfaces the user opened
+// deliberately are never filtered.
+//
+// This is deliberately crude: plain substring matching will hold back some
+// legitimate policy journalism, and will miss things it should catch. It is
+// a politeness layer on one surface, not a content moderation system, and
+// nothing is ever deleted — only moved behind "show these".
+const UNPROMPTED_HOLDBACK = [
+  "csam", "child abuse", "child sexual", "child porn", "pedophil",
+  "rape", "raped", "sexual assault", "sexually assaulted",
+  "suicide", "self-harm", "overdose death",
+  "massacre", "beheaded", "mutilated", "tortured", "torture",
+  "murdered", "dismembered", "child's body", "bodies of children",
+];
+
+function heldBackWhenUnprompted(article) {
+  const title = String(article?.title || "").toLowerCase();
+  return UNPROMPTED_HOLDBACK.some((term) => title.includes(term));
+}
+
+// Returns { shown, held } so the surface can say how many it is holding
+// rather than quietly dropping them.
+function partitionForUnprompted(articles) {
+  const shown = [];
+  const held = [];
+  for (const article of articles || []) {
+    (heldBackWhenUnprompted(article) ? held : shown).push(article);
+  }
+  return { shown, held };
+}
+
 // Host access is requested per topic rather than up front, so installing the
 // extension asks for nothing. These are the origins a topic's feeds need.
 function originsForTopics(topicIds) {

@@ -2,8 +2,11 @@ const digest = document.getElementById("digest");
 const dateline = document.getElementById("dateline");
 const greeting = document.getElementById("greeting");
 const stopDailyBtn = document.getElementById("stopDailyBtn");
+let lastRender = { topicIds: [], articles: {} };
 
 let history = { opened: {}, seen: {} };
+let unprompted = false;   // true when Drift opened this itself
+let heldBack = [];
 
 function openOptions() {
   chrome.runtime.openOptionsPage();
@@ -59,7 +62,13 @@ function renderStory(article, isLead) {
 }
 
 function renderTopic(topic, pool) {
-  const articles = pickStories(pool, history, 3);
+  let articles = pickStories(pool, history, 3);
+
+  if (unprompted) {
+    const { shown, held } = partitionForUnprompted(articles);
+    heldBack.push(...held);
+    articles = shown;
+  }
   const section = document.createElement("section");
   section.className = "topic";
 
@@ -84,6 +93,7 @@ function renderTopic(topic, pool) {
 
 function render(topicIds, articles) {
   digest.textContent = "";
+  lastRender = { topicIds, articles };
 
   const topics = (topicIds || []).map(getTopic).filter(Boolean);
 
@@ -115,7 +125,22 @@ function render(topicIds, articles) {
   });
   greeting.textContent = fresh === 0 ? "A quiet one today" : "Here's what's new";
 
+  heldBack = [];
   topics.forEach((topic) => renderTopic(topic, articles[topic.id]));
+
+  if (heldBack.length) {
+    const row = document.createElement("button");
+    row.className = "heldback";
+    row.textContent =
+      heldBack.length === 1
+        ? "1 story held back — it's a heavy one. Show it"
+        : `${heldBack.length} stories held back — they're heavy ones. Show them`;
+    row.addEventListener("click", () => {
+      unprompted = false;
+      render(lastRender.topicIds, lastRender.articles);
+    });
+    digest.appendChild(row);
+  }
 }
 
 dateline.textContent = new Date().toLocaleDateString([], {
@@ -125,8 +150,16 @@ dateline.textContent = new Date().toLocaleDateString([], {
 });
 
 chrome.storage.sync.get({ selected_topics: DEFAULT_TOPIC_IDS }, (synced) => {
-  chrome.storage.local.get({ articles: {}, opened_urls: {}, seen_urls: {} }, (local) => {
+  chrome.storage.local.get(
+    { articles: {}, opened_urls: {}, seen_urls: {}, unprompted_open: 0 },
+    (local) => {
     history = { opened: local.opened_urls, seen: local.seen_urls };
+
+    // Only an open Drift initiated, and only this once — reopening the page
+    // deliberately a minute later shows everything.
+    unprompted = Date.now() - local.unprompted_open < 120000;
+    if (unprompted) chrome.storage.local.remove("unprompted_open");
+
     render(synced.selected_topics, local.articles);
 
     // Top up if the cache went stale while the browser was asleep.
@@ -134,7 +167,8 @@ chrome.storage.sync.get({ selected_topics: DEFAULT_TOPIC_IDS }, (synced) => {
       if (chrome.runtime.lastError || !reply?.articles) return;
       render(synced.selected_topics, reply.articles);
     });
-  });
+    }
+  );
 });
 
 document.getElementById("manageBtn").addEventListener("click", openOptions);

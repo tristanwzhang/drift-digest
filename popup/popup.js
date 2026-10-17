@@ -9,6 +9,7 @@ let selectedTopics = [];
 let articlesByTopic = {};
 let activeTopicId = null;
 let history = { opened: {}, seen: {} };
+let unprompted = false;   // true when Drift opened this itself
 
 function openOptions() {
   chrome.runtime.openOptionsPage();
@@ -99,7 +100,14 @@ function renderStory(article, isLead) {
 }
 
 function renderStories() {
-  const articles = pickStories(articlesByTopic[activeTopicId], history, 3);
+  let articles = pickStories(articlesByTopic[activeTopicId], history, 3);
+  let held = [];
+
+  if (unprompted) {
+    const split = partitionForUnprompted(articles);
+    articles = split.shown;
+    held = split.held;
+  }
 
   body.textContent = "";
 
@@ -118,6 +126,19 @@ function renderStories() {
   articles.forEach((article, index) => {
     body.appendChild(renderStory(article, index === 0));
   });
+
+  if (held.length) {
+    const row = document.createElement("button");
+    row.className = "heldback";
+    row.textContent =
+      held.length === 1 ? "1 heavy story held back — show it"
+                        : `${held.length} heavy stories held back — show them`;
+    row.addEventListener("click", () => {
+      unprompted = false;
+      renderStories();
+    });
+    body.appendChild(row);
+  }
 
   // You looked at this tab, so these have had their turn.
   chrome.runtime.sendMessage({
@@ -240,8 +261,19 @@ chrome.storage.sync.get(
     resetPosBtn.hidden = !bubbleMode;
 
     chrome.storage.local.get(
-      { bubble_docked: null, active_topic: null, articles: {}, opened_urls: {}, seen_urls: {} },
+      {
+        bubble_docked: null,
+        active_topic: null,
+        articles: {},
+        opened_urls: {},
+        seen_urls: {},
+        unprompted_open: 0,
+      },
       (local) => {
+        // Only an open Drift initiated, and only once.
+        unprompted = Date.now() - local.unprompted_open < 120000;
+        if (unprompted) chrome.storage.local.remove("unprompted_open");
+
         render(synced.selected_topics, local.active_topic, local.articles, {
           opened: local.opened_urls,
           seen: local.seen_urls,

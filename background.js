@@ -437,6 +437,10 @@ let checkedDate = null; // in-memory fast path; tab switches are frequent
 let dailyCheck = null;  // in-flight guard; triggers can fire simultaneously
 
 async function openDigest() {
+  // Marks the next surface open as unprompted, so it knows to be gentler.
+  // The surface clears it, so a deliberate open a minute later is unfiltered.
+  await chrome.storage.local.set({ unprompted_open: Date.now() });
+
   // openPopup() needs a focused window and can be refused; the tab always works.
   try {
     await chrome.action.openPopup();

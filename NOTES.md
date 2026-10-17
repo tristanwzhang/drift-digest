@@ -19,10 +19,19 @@ card. Feed failures log there as `[Drift] feed failed: <url>`.
 shared/data.js      topics, their RSS feeds, and shared helpers (loaded by everything)
 background.js       service worker: fetch → parse → rank → cache
 popup/              the toolbar popup — the default surface
-content/            optional floating bubble, injected into every page
-daily/              full-page digest, used as the daily check-in fallback
+content/            optional floating bubble, registered at runtime if enabled
+daily/              full-page digest, used for the daily check-in
 options/            topic picker, display mode, daily check-in toggle
+store/              privacy policy and Chrome Web Store listing copy
 ```
+
+## Permissions
+
+Nothing broad is requested at install. `storage`, `alarms` and `scripting`
+produce no warning prompt. Every host sits in `optional_host_permissions`:
+selecting a topic requests access to that topic's publishers, and choosing the
+floating bubble requests page access and registers the content script at
+runtime. A toolbar-only install never asks for page access at all.
 
 The service worker is the only thing that touches the network. It writes a
 normalized cache to `chrome.storage.local`, and every surface reads from that —
@@ -75,21 +84,19 @@ TechCrunch and Quanta feeds: 25 items, zero malformed, no leftover markup.
 
 ## Known gaps
 
-- **Never run in a browser.** Everything here is syntax-checked and unit-tested
-  in Node. No line has executed in Chrome. Expect first-load bugs.
 - **`chrome.action.openPopup()` at cold startup is unverified.** The docs don't
-  say whether it needs a user gesture. The tab fallback exists because of this.
-- **Corroboration rarely fires** with two feeds per topic — the mechanism works,
-  but same-story overlap across just two sources is uncommon. More sources per
-  topic would make it earn its keep.
-- **Cross-topic duplicates aren't caught.** Clustering runs within a topic, so
-  one story can appear in both AI and Startups.
-- **20 host permissions** makes for an alarming install prompt and more Web
-  Store review scrutiny. User-configurable feeds would need
-  `optional_host_permissions`.
+  say whether it needs a user gesture. The tab fallback exists because of this,
+  and the daily check-in has still never been observed firing.
+- **Clustering is heuristic.** The 0.30 threshold was tuned against one day of
+  live feeds and is biased toward over-merging, on the grounds that a false
+  merge is invisible while a repeated story is not.
+- **The unprompted holdback is plain substring matching.** It will hold back
+  some legitimate reporting and miss things it should catch. It applies only to
+  opens Drift initiated, and never deletes anything.
 - **No video.** YouTube's free channel RSS returns 404 as of Oct 2026; the Data
   API needs a key, which can't ship in an extension. LinkedIn, TikTok and Reels
   have no public feeds at all.
+- **No custom topics or user-supplied feeds.**
 
 ## Testing
 
