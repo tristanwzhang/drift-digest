@@ -18,6 +18,85 @@ const NEWSLETTER_TOPICS = [
     ],
   },
   {
+    id: "world",
+    label: "World News",
+    short: "World",
+    emoji: "🌍",
+    feeds: [
+      { url: "https://feeds.bbci.co.uk/news/world/rss.xml", name: "BBC World" },
+      { url: "https://feeds.npr.org/1004/rss.xml", name: "NPR World" },
+      { url: "https://www.aljazeera.com/xml/rss/all.xml", name: "Al Jazeera" },
+    ],
+  },
+  {
+    id: "politics",
+    label: "Politics",
+    short: "Politics",
+    emoji: "🏛️",
+    feeds: [
+      { url: "https://feeds.npr.org/1014/rss.xml", name: "NPR Politics" },
+      { url: "https://rss.politico.com/politics-news.xml", name: "Politico" },
+    ],
+  },
+  {
+    id: "startups",
+    label: "Startups & VC",
+    short: "Startups",
+    emoji: "💼",
+    feeds: [
+      { url: "https://techcrunch.com/feed/", name: "TechCrunch" },
+      { url: "https://news.crunchbase.com/feed/", name: "Crunchbase News" },
+      { url: "https://news.ycombinator.com/rss", name: "Hacker News" },
+      { url: "https://sifted.eu/feed", name: "Sifted" },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Money & Markets",
+    short: "Finance",
+    emoji: "💰",
+    feeds: [
+      { url: "https://www.marketwatch.com/rss/topstories", name: "MarketWatch" },
+      { url: "https://www.nerdwallet.com/blog/feed/", name: "NerdWallet" },
+      { url: "https://www.kiplinger.com/feed/all", name: "Kiplinger" },
+      { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", name: "CNBC" },
+    ],
+  },
+  {
+    id: "security",
+    label: "Cybersecurity",
+    short: "Security",
+    emoji: "🔒",
+    feeds: [
+      { url: "https://krebsonsecurity.com/feed/", name: "Krebs on Security" },
+      { url: "https://www.bleepingcomputer.com/feed/", name: "BleepingComputer" },
+      { url: "https://feeds.feedburner.com/TheHackersNews", name: "The Hacker News" },
+    ],
+  },
+  {
+    id: "code",
+    label: "Programming",
+    short: "Code",
+    emoji: "💻",
+    feeds: [
+      { url: "https://feed.infoq.com/", name: "InfoQ" },
+      { url: "https://dev.to/feed", name: "Dev.to" },
+      { url: "https://github.blog/feed/", name: "GitHub Blog" },
+    ],
+  },
+  {
+    id: "science",
+    label: "Science",
+    short: "Science",
+    emoji: "🔬",
+    feeds: [
+      { url: "https://www.quantamagazine.org/feed/", name: "Quanta Magazine" },
+      { url: "https://www.sciencenews.org/feed", name: "Science News" },
+      { url: "https://www.newscientist.com/feed/home/", name: "New Scientist" },
+      { url: "https://www.sciencedaily.com/rss/all.xml", name: "ScienceDaily" },
+    ],
+  },
+  {
     id: "climate",
     label: "Climate & Energy",
     short: "Climate",
@@ -41,26 +120,45 @@ const NEWSLETTER_TOPICS = [
     ],
   },
   {
-    id: "startups",
-    label: "Startups & VC",
-    short: "Startups",
-    emoji: "💼",
-    feeds: [
-      { url: "https://techcrunch.com/feed/", name: "TechCrunch" },
-      { url: "https://news.crunchbase.com/feed/", name: "Crunchbase News" },
-      { url: "https://news.ycombinator.com/rss", name: "Hacker News" },
-      { url: "https://sifted.eu/feed", name: "Sifted" },
-    ],
-  },
-  {
     id: "health",
-    label: "Personal Health",
+    label: "Health & Medicine",
     short: "Health",
     emoji: "🧬",
     feeds: [
       { url: "https://www.statnews.com/feed/", name: "STAT News" },
       { url: "https://feeds.npr.org/1128/rss.xml", name: "NPR Health" },
       { url: "https://www.sciencedaily.com/rss/health_medicine.xml", name: "ScienceDaily" },
+    ],
+  },
+  {
+    id: "fitness",
+    label: "Fitness & Training",
+    short: "Fitness",
+    emoji: "🏃",
+    feeds: [
+      { url: "https://www.outsideonline.com/feed/", name: "Outside" },
+      { url: "https://www.runnersworld.com/rss/all.xml/", name: "Runner's World" },
+    ],
+  },
+  {
+    id: "design",
+    label: "Design & Product",
+    short: "Design",
+    emoji: "🎨",
+    feeds: [
+      { url: "https://www.smashingmagazine.com/feed/", name: "Smashing Magazine" },
+      { url: "https://uxdesign.cc/feed", name: "UX Collective" },
+      { url: "https://www.nngroup.com/feed/rss/", name: "Nielsen Norman" },
+    ],
+  },
+  {
+    id: "architecture",
+    label: "Architecture",
+    short: "Architecture",
+    emoji: "🏗️",
+    feeds: [
+      { url: "https://www.dezeen.com/feed/", name: "Dezeen" },
+      { url: "https://www.archdaily.com/rss/", name: "ArchDaily" },
     ],
   },
   {
@@ -76,36 +174,75 @@ const NEWSLETTER_TOPICS = [
     ],
   },
   {
-    id: "design",
-    label: "Design & Product",
-    short: "Design",
-    emoji: "🎨",
+    id: "film",
+    label: "Film & TV",
+    short: "Film",
+    emoji: "🎬",
     feeds: [
-      { url: "https://www.smashingmagazine.com/feed/", name: "Smashing Magazine" },
-      { url: "https://uxdesign.cc/feed", name: "UX Collective" },
-      { url: "https://www.nngroup.com/feed/rss/", name: "Nielsen Norman" },
+      { url: "https://variety.com/feed/", name: "Variety" },
+      { url: "https://www.indiewire.com/feed/", name: "IndieWire" },
     ],
   },
   {
-    id: "finance",
-    label: "Personal Finance",
-    short: "Finance",
-    emoji: "💰",
+    id: "music",
+    label: "Music",
+    short: "Music",
+    emoji: "🎵",
     feeds: [
-      { url: "https://www.marketwatch.com/rss/topstories", name: "MarketWatch" },
-      { url: "https://www.nerdwallet.com/blog/feed/", name: "NerdWallet" },
+      { url: "https://pitchfork.com/rss/news/", name: "Pitchfork" },
+      { url: "https://www.stereogum.com/feed/", name: "Stereogum" },
+      { url: "https://www.billboard.com/feed/", name: "Billboard" },
     ],
   },
   {
-    id: "science",
-    label: "Science",
-    short: "Science",
-    emoji: "🔬",
+    id: "books",
+    label: "Books",
+    short: "Books",
+    emoji: "📚",
     feeds: [
-      { url: "https://www.quantamagazine.org/feed/", name: "Quanta Magazine" },
-      { url: "https://www.sciencenews.org/feed", name: "Science News" },
-      { url: "https://www.newscientist.com/feed/home/", name: "New Scientist" },
-      { url: "https://www.sciencedaily.com/rss/all.xml", name: "ScienceDaily" },
+      { url: "https://lithub.com/feed/", name: "Literary Hub" },
+      { url: "https://www.theguardian.com/books/rss", name: "Guardian Books" },
+    ],
+  },
+  {
+    id: "food",
+    label: "Food & Cooking",
+    short: "Food",
+    emoji: "🍳",
+    feeds: [
+      { url: "https://www.eater.com/rss/index.xml", name: "Eater" },
+      { url: "https://www.bonappetit.com/feed/rss", name: "Bon Appétit" },
+    ],
+  },
+  {
+    id: "cars",
+    label: "Cars & EVs",
+    short: "Cars",
+    emoji: "🚗",
+    feeds: [
+      { url: "https://electrek.co/feed/", name: "Electrek" },
+      { url: "https://insideevs.com/rss/articles/all/", name: "InsideEVs" },
+      { url: "https://jalopnik.com/rss", name: "Jalopnik" },
+    ],
+  },
+  {
+    id: "crypto",
+    label: "Crypto",
+    short: "Crypto",
+    emoji: "🪙",
+    feeds: [
+      { url: "https://www.coindesk.com/arc/outboundfeeds/rss/", name: "CoinDesk" },
+      { url: "https://decrypt.co/feed", name: "Decrypt" },
+    ],
+  },
+  {
+    id: "photo",
+    label: "Photography",
+    short: "Photo",
+    emoji: "📷",
+    feeds: [
+      { url: "https://petapixel.com/feed/", name: "PetaPixel" },
+      { url: "https://www.dpreview.com/feeds/news.xml", name: "DPReview" },
     ],
   },
   {
@@ -210,6 +347,8 @@ function pickStories(pool, history, limit) {
 // Filenames are slugified source names; see icons/sources/_map.json.
 function sourceIconUrl(sourceName) {
   const slug = String(sourceName || "")
+    .normalize("NFD")                      // "Bon Appétit" -> "Bon Appe\u0301tit"
+    .replace(/[\u0300-\u036f]/g, "")       // drop the combining accents
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
