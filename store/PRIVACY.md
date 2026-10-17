@@ -70,4 +70,6 @@ bubble off removes it.
 
 ## Contact
 
-Questions about this policy: tristanwzhang@gmail.com
+Questions about this policy: _(add a contact address before publishing — the
+Chrome Web Store requires one. Consider an alias rather than a personal inbox,
+since this page is public.)_
