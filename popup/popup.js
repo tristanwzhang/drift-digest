@@ -53,6 +53,15 @@ function sameArticles(a, b) {
   return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
 }
 
+// Knowing before you click beats discovering after.
+function paywallTag() {
+  const tag = document.createElement("span");
+  tag.className = "paywall-tag";
+  tag.textContent = "paywall";
+  tag.title = "This source may ask you to subscribe";
+  return tag;
+}
+
 // One story, several outlets: pick who you'd rather read it from.
 function coverageRow(others) {
   const row = document.createElement("div");
@@ -82,6 +91,7 @@ function coverageRow(others) {
     name.textContent = other.source;
 
     chip.append(icon, name);
+    if (other.paywall) chip.appendChild(paywallTag());
     row.appendChild(chip);
   }
 
@@ -135,10 +145,14 @@ function renderStory(article, isLead) {
   const source = document.createElement("span");
   source.textContent = article.source;
 
+  const wall = article.paywall ? paywallTag() : null;
+
   const time = document.createElement("span");
   time.textContent = timeAgo(article.publishedAt);
 
-  meta.append(mark, source, separator(), time);
+  meta.append(mark, source);
+  if (wall) meta.appendChild(wall);
+  meta.append(separator(), time);
   if (!article.summary) story.appendChild(headline);
   story.appendChild(meta);
 

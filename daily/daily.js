@@ -18,6 +18,15 @@ function separator() {
   return dot;
 }
 
+// Knowing before you click beats discovering after.
+function paywallTag() {
+  const tag = document.createElement("span");
+  tag.className = "paywall-tag";
+  tag.textContent = "paywall";
+  tag.title = "This source may ask you to subscribe";
+  return tag;
+}
+
 // One story, several outlets: pick who you'd rather read it from.
 function coverageRow(others) {
   const row = document.createElement("div");
@@ -47,6 +56,7 @@ function coverageRow(others) {
     name.textContent = other.source;
 
     chip.append(icon, name);
+    if (other.paywall) chip.appendChild(paywallTag());
     row.appendChild(chip);
   }
 
@@ -98,10 +108,14 @@ function renderStory(article, isLead) {
   const source = document.createElement("span");
   source.textContent = article.source;
 
+  const wall = article.paywall ? paywallTag() : null;
+
   const when = document.createElement("span");
   when.textContent = timeAgo(article.publishedAt);
 
-  meta.append(mark, source, separator(), when);
+  meta.append(mark, source);
+  if (wall) meta.appendChild(wall);
+  meta.append(separator(), when);
   story.appendChild(meta);
 
   const others = (article.coverage || []).filter((c) => c.source !== article.source);

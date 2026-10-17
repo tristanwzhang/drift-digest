@@ -380,6 +380,18 @@
       overflow: hidden;
     }
 
+    .paywall-tag {
+      font-family: var(--code);
+      font-size: 8.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 1px 5px;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 1px var(--hairline);
+      white-space: nowrap;
+    }
+
     .story-meta {
       display: flex;
       align-items: center;
@@ -746,6 +758,15 @@
     return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
   }
 
+  // Knowing before you click beats discovering after.
+  function paywallTag() {
+    const tag = document.createElement("span");
+    tag.className = "paywall-tag";
+    tag.textContent = "paywall";
+    tag.title = "This source may ask you to subscribe";
+    return tag;
+  }
+
   // One story, several outlets: pick who you'd rather read it from.
   function coverageRow(others) {
     const row = document.createElement("div");
@@ -775,6 +796,7 @@
       name.textContent = other.source;
 
       chip.append(icon, name);
+      if (other.paywall) chip.appendChild(paywallTag());
       row.appendChild(chip);
     }
 
@@ -828,10 +850,14 @@
     const source = document.createElement("span");
     source.textContent = article.source;
 
+    const wall = article.paywall ? paywallTag() : null;
+
     const time = document.createElement("span");
     time.textContent = timeAgo(article.publishedAt);
 
-    meta.append(mark, source, separator(), time);
+    meta.append(mark, source);
+    if (wall) meta.appendChild(wall);
+    meta.append(separator(), time);
     if (!article.summary) story.appendChild(headline);
     story.appendChild(meta);
 

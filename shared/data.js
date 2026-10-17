@@ -15,6 +15,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://arstechnica.com/ai/feed/", name: "Ars Technica" },
       { url: "https://the-decoder.com/feed/", name: "The Decoder" },
       { url: "https://www.marktechpost.com/feed/", name: "MarkTechPost" },
+      { url: "https://www.wired.com/feed/rss", name: "Wired" },
     ],
   },
   {
@@ -26,6 +27,9 @@ const NEWSLETTER_TOPICS = [
       { url: "https://feeds.bbci.co.uk/news/world/rss.xml", name: "BBC World" },
       { url: "https://feeds.npr.org/1004/rss.xml", name: "NPR World" },
       { url: "https://www.aljazeera.com/xml/rss/all.xml", name: "Al Jazeera" },
+      { url: "https://www.theguardian.com/world/rss", name: "The Guardian" },
+      { url: "https://api.axios.com/feed/", name: "Axios" },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", name: "The New York Times", paywall: true },
     ],
   },
   {
@@ -36,6 +40,9 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://feeds.npr.org/1014/rss.xml", name: "NPR Politics" },
       { url: "https://rss.politico.com/politics-news.xml", name: "Politico" },
+      { url: "https://www.semafor.com/rss.xml", name: "Semafor" },
+      { url: "https://www.propublica.org/feeds/propublica/main", name: "ProPublica" },
+      { url: "https://www.theatlantic.com/feed/all/", name: "The Atlantic", paywall: true },
     ],
   },
   {
@@ -60,6 +67,8 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.nerdwallet.com/blog/feed/", name: "NerdWallet" },
       { url: "https://www.kiplinger.com/feed/all", name: "Kiplinger" },
       { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", name: "CNBC" },
+      { url: "https://feeds.bloomberg.com/markets/news.rss", name: "Bloomberg", paywall: true },
+      { url: "https://www.ft.com/rss/home", name: "Financial Times", paywall: true },
     ],
   },
   {
@@ -82,6 +91,8 @@ const NEWSLETTER_TOPICS = [
       { url: "https://feed.infoq.com/", name: "InfoQ" },
       { url: "https://dev.to/feed", name: "Dev.to" },
       { url: "https://github.blog/feed/", name: "GitHub Blog" },
+      { url: "https://www.theverge.com/rss/index.xml", name: "The Verge" },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml", name: "The New York Times", paywall: true },
     ],
   },
   {
@@ -94,6 +105,8 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.sciencenews.org/feed", name: "Science News" },
       { url: "https://www.newscientist.com/feed/home/", name: "New Scientist" },
       { url: "https://www.sciencedaily.com/rss/all.xml", name: "ScienceDaily" },
+      { url: "https://www.nature.com/nature.rss", name: "Nature" },
+      { url: "https://www.science.org/rss/news_current.xml", name: "Science" },
     ],
   },
   {

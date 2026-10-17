@@ -257,7 +257,11 @@ function cluster(items) {
     const coverage = [...bySource.values()]
       .sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt))
       .slice(0, MAX_SOURCES_PER_STORY)
-      .map((member) => ({ source: member.source, url: member.url }));
+      .map((member) => ({
+        source: member.source,
+        url: member.url,
+        ...(member.paywall ? { paywall: true } : {}),
+      }));
 
     // The earliest report leads, but if it shipped no summary, borrow one
     // from another outlet rather than showing a bare headline.
@@ -312,6 +316,8 @@ async function fetchFeed(feed, cache) {
     if (!response.ok) throw new Error("HTTP " + response.status);
 
     const items = parseFeed(await response.text(), feed.name);
+    // Carried through to the UI so a reader knows before clicking, not after.
+    if (feed.paywall) items.forEach((item) => { item.paywall = true; });
     return {
       items,
       entry: {
