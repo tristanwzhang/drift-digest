@@ -8,6 +8,9 @@ const REFRESH_MINUTES = 30;
 // Opening it twice in a minute shouldn't hit every feed twice.
 const STALE_AFTER_MS = 5 * 60 * 1000;
 const MAX_PER_TOPIC = 3;
+// The cache holds more than it shows, so each surface can skip what you've
+// already seen without going back to the network.
+const POOL_PER_TOPIC = 8;
 // A week-old item is not "what's new" — better to show nothing than to pad.
 const MAX_AGE_HOURS = 168;
 // Only this recent earns the "new" marker.
@@ -179,12 +182,18 @@ function cluster(items) {
 
     if (match) {
       match.sources.add(item.source);
+      match.topics.push(item.topicId);
       // keep the earliest report; it's usually the one that broke it
       if (new Date(item.publishedAt) < new Date(match.item.publishedAt)) {
         match.item = item;
       }
     } else {
-      clusters.push({ item, tokens, sources: new Set([item.source]) });
+      clusters.push({
+        item,
+        tokens,
+        sources: new Set([item.source]),
+        topics: [item.topicId],
+      });
     }
   });
 
@@ -192,6 +201,7 @@ function cluster(items) {
     ...c.item,
     corroboration: c.sources.size,
     fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
+    topics: c.topics,
   }));
 }
 
@@ -225,19 +235,49 @@ async function fetchFeed(feed) {
   }
 }
 
-async function fetchTopic(topic) {
+// Raw items for one topic, tagged so clustering can run across all of them.
+async function fetchTopicItems(topic) {
   const results = await Promise.all(topic.feeds.map(fetchFeed));
   const seen = new Set();
 
-  const fresh = results.flat().filter((item) => {
+  return results.flat().filter((item) => {
     if (seen.has(item.url)) return false;
     seen.add(item.url);
+    item.topicId = topic.id;
     return ageHours(item.publishedAt) <= MAX_AGE_HOURS;
   });
+}
 
-  // Deliberately may return fewer than MAX_PER_TOPIC, including none:
-  // an honest quiet day beats three pieces of filler.
-  return rank(fresh).slice(0, MAX_PER_TOPIC);
+// Clustering runs across every followed topic at once, so a story that is both
+// AI news and startup news collapses into one item instead of appearing twice
+// in two tabs. The cluster lands in whichever topic carried it most, with the
+// user's own topic order breaking ties.
+function assignToTopics(clusters, topicOrder) {
+  const byTopic = {};
+  topicOrder.forEach((id) => {
+    byTopic[id] = [];
+  });
+
+  for (const cluster of clusters) {
+    const counts = new Map();
+    for (const id of cluster.topics) {
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+
+    let best = null;
+    let bestCount = -1;
+    for (const id of topicOrder) {
+      const count = counts.get(id) || 0;
+      if (count > bestCount) {
+        best = id;
+        bestCount = count;
+      }
+    }
+
+    if (best && byTopic[best]) byTopic[best].push(cluster);
+  }
+
+  return byTopic;
 }
 
 // Concurrent callers share one fetch rather than each starting their own.
@@ -271,17 +311,62 @@ async function doRefresh() {
   });
 
   const topics = selected.map(getTopic).filter(Boolean);
-  const fetched = await Promise.all(topics.map(fetchTopic));
+  const fetched = await Promise.all(topics.map(fetchTopicItems));
+
+  const order = topics.map((topic) => topic.id);
+  const grouped = assignToTopics(rank(fetched.flat()), order);
 
   // Keep empty topics in the map — "quiet today" is a real answer, and
   // dropping the key would make the panel think the fetch failed.
+  // A pool rather than exactly three: the surfaces trim it against what
+  // you've already seen.
   const articles = {};
-  topics.forEach((topic, index) => {
-    articles[topic.id] = fetched[index];
+  order.forEach((id) => {
+    articles[id] = (grouped[id] || [])
+      .slice(0, POOL_PER_TOPIC)
+      // `topics` carries one entry per source article so assignment can count
+      // them; it has done its job by now and shouldn't bloat the cache.
+      .map(({ topics, ...article }) => article);
   });
 
   await chrome.storage.local.set({ articles, fetched_at: Date.now() });
   return articles;
+}
+
+// ---------- reading history ----------
+//
+// Kept locally and never sent anywhere. Pruned so it can't grow without bound.
+
+const HISTORY_LIMIT = 500;
+const HISTORY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function prune(record) {
+  const cutoff = Date.now() - HISTORY_MAX_AGE_MS;
+  const entries = Object.entries(record)
+    .filter(([, value]) => (value?.t ?? value) > cutoff)
+    .sort((a, b) => (b[1]?.t ?? b[1]) - (a[1]?.t ?? a[1]))
+    .slice(0, HISTORY_LIMIT);
+  return Object.fromEntries(entries);
+}
+
+async function markSeen(urls) {
+  if (!urls?.length) return;
+  const { seen_urls: seen } = await chrome.storage.local.get({ seen_urls: {} });
+  const now = Date.now();
+
+  for (const url of urls) {
+    const previous = seen[url];
+    seen[url] = { n: (previous?.n || 0) + 1, t: now };
+  }
+
+  await chrome.storage.local.set({ seen_urls: prune(seen) });
+}
+
+async function markOpened(url) {
+  if (!url) return;
+  const { opened_urls: opened } = await chrome.storage.local.get({ opened_urls: {} });
+  opened[url] = { t: Date.now() };
+  await chrome.storage.local.set({ opened_urls: prune(opened) });
 }
 
 // ---------- the once-a-day check-in ----------
@@ -396,6 +481,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "REFRESH") {
     refresh().then((articles) => sendResponse({ articles }));
     return true; // keep the channel open for the async reply
+  }
+
+  if (message?.type === "MARK_SEEN") {
+    markSeen(message.urls);
+    return false;
+  }
+
+  if (message?.type === "MARK_OPENED") {
+    markOpened(message.url);
+    return false;
   }
 
   if (message?.type === "REFRESH_IF_STALE") {

@@ -648,6 +648,7 @@
   let articlesByTopic = {};
   let activeTopicId = null;
   let unreadTopics = new Set();
+  let history = { opened: {}, seen: {} };
 
   function showNotice(text, actionLabel, action) {
     topicTabs.hidden = true;
@@ -711,6 +712,10 @@
       meta.append(fresh, separator());
     }
 
+    story.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
+    });
+
     const mark = document.createElement("img");
     mark.className = "story-favicon";
     mark.src = sourceIconUrl(article.source);
@@ -730,7 +735,7 @@
   }
 
   function renderStories() {
-    const articles = articlesByTopic[activeTopicId] || [];
+    const articles = pickStories(articlesByTopic[activeTopicId], history, 3);
 
     panelBody.textContent = "";
 
@@ -748,6 +753,12 @@
 
     articles.forEach((article, index) => {
       panelBody.appendChild(renderStory(article, index === 0));
+    });
+
+    // You looked at this tab, so these have had their turn.
+    chrome.runtime.sendMessage({
+      type: "MARK_SEEN",
+      urls: articles.map((article) => article.url),
     });
 
     // replay the fade so switching tabs reads as a change
@@ -843,7 +854,9 @@
     if (Object.keys(previousArticles).length === 0) {
       // first load — everything is new
       unreadTopics = new Set(
-        selectedTopics.filter((id) => articlesByTopic[id]?.some((a) => a.fresh))
+        selectedTopics.filter((id) =>
+          pickStories(articlesByTopic[id], history, 3).some((a) => a.fresh)
+        )
       );
     } else {
       // a refresh only marks the topics whose stories actually changed
@@ -883,8 +896,15 @@
       });
 
       chrome.storage.local.get(
-        { bubble_pos: DEFAULT_POS, bubble_docked: null, active_topic: null },
+        {
+          bubble_pos: DEFAULT_POS,
+          bubble_docked: null,
+          active_topic: null,
+          opened_urls: {},
+          seen_urls: {},
+        },
         (local) => {
+          history = { opened: local.opened_urls, seen: local.seen_urls };
           pos = fromPct(local.bubble_pos);
           applyPos();
           if (local.bubble_docked) setDocked(local.bubble_docked, false);
@@ -914,6 +934,8 @@
         applyPos();
       }
       if (changes.bubble_docked) setDocked(changes.bubble_docked.newValue, false);
+      if (changes.opened_urls) history.opened = changes.opened_urls.newValue || {};
+      if (changes.seen_urls) history.seen = changes.seen_urls.newValue || {};
     }
   });
 })();

@@ -128,6 +128,31 @@ const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";
 
+// How many times a story can sit in front of you, unclicked, before it steps
+// aside for something newer. Not zero: glancing past something once shouldn't
+// bury it.
+const SEEN_DEMOTE_AT = 3;
+
+// The cache holds a pool per topic; this trims it against what you've already
+// read. Opened stories drop out entirely — you've read them. Stories shown
+// repeatedly and ignored fall behind fresher ones but aren't deleted, so a
+// quiet topic still has something in it.
+function pickStories(pool, history, limit) {
+  const opened = history?.opened || {};
+  const seen = history?.seen || {};
+
+  const unread = (pool || []).filter((article) => !opened[article.url]);
+
+  const ahead = [];
+  const behind = [];
+  for (const article of unread) {
+    const count = seen[article.url]?.n || 0;
+    (count >= SEEN_DEMOTE_AT ? behind : ahead).push(article);
+  }
+
+  return [...ahead, ...behind].slice(0, limit ?? 3);
+}
+
 // Source logos are bundled rather than fetched: no request per headline, and
 // nothing tells a publisher (or a favicon service) what the reader follows.
 // Filenames are slugified source names; see icons/sources/_map.json.

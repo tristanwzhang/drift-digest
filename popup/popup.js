@@ -8,6 +8,7 @@ const DEFAULT_POS = { xPct: 0.97, yPct: 0.42 };
 let selectedTopics = [];
 let articlesByTopic = {};
 let activeTopicId = null;
+let history = { opened: {}, seen: {} };
 
 function openOptions() {
   chrome.runtime.openOptionsPage();
@@ -75,6 +76,10 @@ function renderStory(article, isLead) {
     meta.append(fresh, separator());
   }
 
+  story.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
+  });
+
   const mark = document.createElement("img");
   mark.className = "story-favicon";
   mark.src = sourceIconUrl(article.source);
@@ -94,7 +99,7 @@ function renderStory(article, isLead) {
 }
 
 function renderStories() {
-  const articles = articlesByTopic[activeTopicId] || [];
+  const articles = pickStories(articlesByTopic[activeTopicId], history, 3);
 
   body.textContent = "";
 
@@ -110,8 +115,14 @@ function renderStories() {
     return;
   }
 
-  articles.slice(0, 3).forEach((article, index) => {
+  articles.forEach((article, index) => {
     body.appendChild(renderStory(article, index === 0));
+  });
+
+  // You looked at this tab, so these have had their turn.
+  chrome.runtime.sendMessage({
+    type: "MARK_SEEN",
+    urls: articles.map((article) => article.url),
   });
 
   // replay the fade so switching tabs reads as a change
@@ -165,8 +176,9 @@ topicTabs.addEventListener("keydown", (event) => {
   event.preventDefault();
 });
 
-function render(topicIds, savedTopicId, articles) {
+function render(topicIds, savedTopicId, articles, readingHistory) {
   articlesByTopic = articles || {};
+  if (readingHistory) history = readingHistory;
   selectedTopics = (topicIds || []).filter((id) => getTopic(id));
 
   if (selectedTopics.length === 0) {
@@ -208,9 +220,12 @@ chrome.storage.sync.get(
     resetPosBtn.hidden = !bubbleMode;
 
     chrome.storage.local.get(
-      { bubble_docked: null, active_topic: null, articles: {} },
+      { bubble_docked: null, active_topic: null, articles: {}, opened_urls: {}, seen_urls: {} },
       (local) => {
-        render(synced.selected_topics, local.active_topic, local.articles);
+        render(synced.selected_topics, local.active_topic, local.articles, {
+          opened: local.opened_urls,
+          seen: local.seen_urls,
+        });
         bubbleRow.hidden = !(bubbleMode && local.bubble_docked);
       }
     );

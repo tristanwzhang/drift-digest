@@ -3,6 +3,8 @@ const dateline = document.getElementById("dateline");
 const greeting = document.getElementById("greeting");
 const stopDailyBtn = document.getElementById("stopDailyBtn");
 
+let history = { opened: {}, seen: {} };
+
 function openOptions() {
   chrome.runtime.openOptionsPage();
 }
@@ -34,6 +36,10 @@ function renderStory(article, isLead) {
     meta.append(fresh, separator());
   }
 
+  story.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
+  });
+
   const mark = document.createElement("img");
   mark.className = "story-favicon";
   mark.src = sourceIconUrl(article.source);
@@ -52,7 +58,8 @@ function renderStory(article, isLead) {
   return story;
 }
 
-function renderTopic(topic, articles) {
+function renderTopic(topic, pool) {
+  const articles = pickStories(pool, history, 3);
   const section = document.createElement("section");
   section.className = "topic";
 
@@ -99,10 +106,13 @@ function render(topicIds, articles) {
     return;
   }
 
-  const fresh = topics.reduce(
-    (n, topic) => n + (articles[topic.id]?.filter((a) => a.fresh).length || 0),
-    0
-  );
+  const shown = topics.flatMap((topic) => pickStories(articles[topic.id], history, 3));
+  const fresh = shown.filter((article) => article.fresh).length;
+
+  chrome.runtime.sendMessage({
+    type: "MARK_SEEN",
+    urls: shown.map((article) => article.url),
+  });
   greeting.textContent = fresh === 0 ? "A quiet one today" : "Here's what's new";
 
   topics.forEach((topic) => renderTopic(topic, articles[topic.id]));
@@ -115,7 +125,8 @@ dateline.textContent = new Date().toLocaleDateString([], {
 });
 
 chrome.storage.sync.get({ selected_topics: DEFAULT_TOPIC_IDS }, (synced) => {
-  chrome.storage.local.get({ articles: {} }, (local) => {
+  chrome.storage.local.get({ articles: {}, opened_urls: {}, seen_urls: {} }, (local) => {
+    history = { opened: local.opened_urls, seen: local.seen_urls };
     render(synced.selected_topics, local.articles);
 
     // Top up if the cache went stale while the browser was asleep.
