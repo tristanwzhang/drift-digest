@@ -208,6 +208,18 @@ body {
 }
 .story.lead .story-title { font-size: 17px; line-height: 1.42; margin-bottom: 8px; }
 
+.story-lead {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .story-meta {
   display: flex;
   align-items: center;

@@ -67,6 +67,15 @@ function renderStory(article, isLead) {
   headline.className = "story-title";
   headline.textContent = article.title;
 
+  // Not every feed ships one — Hacker News, for instance, has nothing useful.
+  if (article.summary) {
+    const lead = document.createElement("p");
+    lead.className = "story-lead";
+    lead.textContent = article.summary;
+    story.appendChild(headline);
+    story.appendChild(lead);
+  }
+
   const meta = document.createElement("p");
   meta.className = "story-meta";
 
@@ -95,7 +104,8 @@ function renderStory(article, isLead) {
   time.textContent = timeAgo(article.publishedAt);
 
   meta.append(mark, source, separator(), time);
-  story.append(headline, meta);
+  if (!article.summary) story.appendChild(headline);
+  story.appendChild(meta);
   return story;
 }
 

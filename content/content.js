@@ -322,6 +322,18 @@
     }
     .story.lead .story-title { font-size: 17px; line-height: 1.42; margin-bottom: 8px; }
 
+    .story-lead {
+      margin: 0 0 8px;
+      font-family: var(--sans);
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-dim);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
     .story-meta {
       display: flex;
       align-items: center;
@@ -702,6 +714,15 @@
     headline.className = "story-title";
     headline.textContent = article.title;
 
+    // Not every feed ships one — Hacker News, for instance, has nothing useful.
+    if (article.summary) {
+      const lead = document.createElement("p");
+      lead.className = "story-lead";
+      lead.textContent = article.summary;
+      story.appendChild(headline);
+      story.appendChild(lead);
+    }
+
     const meta = document.createElement("p");
     meta.className = "story-meta";
 
@@ -730,7 +751,8 @@
     time.textContent = timeAgo(article.publishedAt);
 
     meta.append(mark, source, separator(), time);
-    story.append(headline, meta);
+    if (!article.summary) story.appendChild(headline);
+    story.appendChild(meta);
     return story;
   }
 

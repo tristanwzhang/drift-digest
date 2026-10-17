@@ -16,6 +16,10 @@ const MAX_AGE_HOURS = 168;
 // Only this recent earns the "new" marker.
 const FRESH_HOURS = 24;
 const FETCH_TIMEOUT_MS = 10000;
+// Feeds vary wildly — some ship a sentence, some ship the entire article.
+// Truncation happens at parse time so a full body never reaches the cache:
+// this is a lead to help you decide, not a copy of the piece.
+const SUMMARY_MAX = 150;
 const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
 const BUBBLE_SCRIPT_ID = "drift-bubble";
@@ -69,6 +73,31 @@ function pickLink(block) {
   return clean(pickTag(block, "guid"));
 }
 
+// A one-line lead, taken from whatever the feed offers.
+function pickSummary(block, title) {
+  let best = "";
+  for (const tag of ["description", "summary", "content:encoded", "content"]) {
+    const text = clean(pickTag(block, tag));
+    if (text.length > best.length) best = text;
+  }
+
+  if (!best) return "";
+
+  // Some feeds just repeat the headline; that's noise, not context.
+  const normalize = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (normalize(best).startsWith(normalize(title)) && best.length < title.length * 1.4) {
+    return "";
+  }
+  if (best.length < 30) return "";
+
+  if (best.length <= SUMMARY_MAX) return best;
+
+  // cut on a word boundary so it reads as a sentence trailing off
+  const cut = best.slice(0, SUMMARY_MAX);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > SUMMARY_MAX * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:—-]+$/, "") + "…";
+}
+
 function pickDate(block) {
   const raw =
     pickTag(block, "pubDate") ||
@@ -84,12 +113,16 @@ function parseFeed(xml, sourceName) {
   const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) || [];
 
   return blocks
-    .map((block) => ({
-      title: clean(pickTag(block, "title")),
-      url: pickLink(block),
-      source: sourceName,
-      publishedAt: pickDate(block) || new Date().toISOString(),
-    }))
+    .map((block) => {
+      const title = clean(pickTag(block, "title"));
+      return {
+        title,
+        summary: pickSummary(block, title),
+        url: pickLink(block),
+        source: sourceName,
+        publishedAt: pickDate(block) || new Date().toISOString(),
+      };
+    })
     .filter((item) => item.title && /^https?:\/\//i.test(item.url));
 }
 
