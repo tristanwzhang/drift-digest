@@ -2,6 +2,46 @@ const topicGrid = document.getElementById("topicGrid");
 const savedHint = document.getElementById("savedHint");
 const modeCards = Array.from(document.querySelectorAll(".mode-card"));
 const dailyToggle = document.getElementById("dailyToggle");
+const upgradeRow = document.getElementById("upgradeRow");
+const upgradeTitle = document.getElementById("upgradeTitle");
+const upgradeBtn = document.getElementById("upgradeBtn");
+
+// Topics you already follow can gain new publishers in an update. Permission
+// was only ever asked for at the moment you picked the topic, so there has to
+// be a way to catch up — one prompt covering everything that's missing.
+let pendingOrigins = [];
+
+async function findMissingAccess() {
+  const origins = originsForTopics([...selectedTopics]);
+  const checks = await Promise.all(
+    origins.map((origin) =>
+      new Promise((resolve) =>
+        chrome.permissions.contains({ origins: [origin] }, (granted) =>
+          resolve(granted && !chrome.runtime.lastError)
+        )
+      )
+    )
+  );
+
+  pendingOrigins = origins.filter((_, index) => !checks[index]);
+  upgradeRow.hidden = pendingOrigins.length === 0;
+
+  if (pendingOrigins.length) {
+    const n = pendingOrigins.length;
+    upgradeTitle.textContent =
+      n === 1 ? "1 new source needs your permission"
+              : `${n} new sources need your permission`;
+  }
+}
+
+upgradeBtn.addEventListener("click", () => {
+  chrome.permissions.request({ origins: pendingOrigins }, (granted) => {
+    if (granted) {
+      upgradeRow.hidden = true;
+      showNotice("Thanks — those sources will appear at the next refresh.");
+    }
+  });
+});
 
 let selectedTopics = new Set();
 let displayMode = DEFAULT_DISPLAY_MODE;
@@ -123,6 +163,7 @@ function renderGrid() {
           selectedTopics.add(topic.id);
           renderGrid();
           persist();
+          findMissingAccess();
         }
       );
     });
@@ -143,5 +184,6 @@ chrome.storage.sync.get(
     dailyToggle.checked = data.daily_open;
     renderGrid();
     renderModes();
+    findMissingAccess();
   }
 );

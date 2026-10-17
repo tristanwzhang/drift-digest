@@ -314,17 +314,22 @@ function partitionForUnprompted(articles) {
 
 // Host access is requested per topic rather than up front, so installing the
 // extension asks for nothing. These are the origins a topic's feeds need.
+function originOfFeed(url) {
+  try {
+    return new URL(url).origin + "/*";
+  } catch (error) {
+    return null; // a malformed feed URL shouldn't take the whole request down
+  }
+}
+
 function originsForTopics(topicIds) {
   const origins = new Set();
   for (const id of topicIds || []) {
     const topic = getTopic(id);
     if (!topic) continue;
     for (const feed of topic.feeds) {
-      try {
-        origins.add(new URL(feed.url).origin + "/*");
-      } catch (error) {
-        // a malformed feed URL shouldn't take the whole request down
-      }
+      const origin = originOfFeed(feed.url);
+      if (origin) origins.add(origin);
     }
   }
   return [...origins];

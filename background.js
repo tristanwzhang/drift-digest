@@ -337,14 +337,14 @@ async function fetchFeed(feed, cache) {
 }
 
 // Raw items for one topic, tagged so clustering can run across all of them.
-async function fetchTopicItems(topic, cache, nextCache, skipNetwork) {
+async function fetchTopicItems(topic, feeds, cache, nextCache, skipNetwork) {
   // Clustering runs across every topic, so a single-topic refresh still needs
   // the others' items — it just takes them from cache instead of the network.
   const results = skipNetwork
-    ? topic.feeds.map((feed) => ({ items: cache[feed.url]?.items || [], entry: cache[feed.url], changed: false }))
-    : await Promise.all(topic.feeds.map((feed) => fetchFeed(feed, cache)));
+    ? feeds.map((feed) => ({ items: cache[feed.url]?.items || [], entry: cache[feed.url], changed: false }))
+    : await Promise.all(feeds.map((feed) => fetchFeed(feed, cache)));
 
-  topic.feeds.forEach((feed, index) => {
+  feeds.forEach((feed, index) => {
     if (results[index].entry) nextCache[feed.url] = results[index].entry;
   });
 
@@ -440,18 +440,32 @@ async function doRefresh(only) {
 
   const all = selected.map(getTopic).filter(Boolean);
 
-  // A topic whose feeds haven't been granted access is skipped rather than
-  // failing noisily — the UI asks for the permission instead.
-  const checks = await Promise.all(
-    all.map((topic) => hasOrigins(originsForTopics([topic.id])))
+  // Permission is checked per feed, never per topic. chrome.permissions
+  // .contains() is all-or-nothing, so checking a whole topic at once meant
+  // adding one new source to an existing topic blacked out that entire topic
+  // until the new origin was granted. A topic now uses whichever of its feeds
+  // it can reach, and only goes quiet if it can reach none of them.
+  const reachable = await Promise.all(
+    all.map(async (topic) => {
+      const checks = await Promise.all(
+        topic.feeds.map((feed) => {
+          const origin = originOfFeed(feed.url);
+          return origin ? hasOrigins([origin]) : Promise.resolve(false);
+        })
+      );
+      return topic.feeds.filter((_, index) => checks[index]);
+    })
   );
-  const topics = all.filter((_, index) => checks[index]);
+
+  const topics = all.filter((_, index) => reachable[index].length > 0);
+  const topicFeeds = reachable.filter((feeds) => feeds.length > 0);
 
   const cache = await readFeedCache();
   const nextCache = {};
   const fetched = await Promise.all(
-    topics.map((topic) =>
-      fetchTopicItems(topic, cache, nextCache, Boolean(only) && topic.id !== only)
+    topics.map((topic, index) =>
+      fetchTopicItems(topic, topicFeeds[index], cache, nextCache,
+                      Boolean(only) && topic.id !== only)
     )
   );
 
