@@ -115,17 +115,51 @@ function titleTokens(title) {
   );
 }
 
-// Jaccard overlap — same story from two outlets shares most of its nouns.
-function similarity(a, b) {
-  if (a.size === 0 || b.size === 0) return 0;
-  let shared = 0;
-  a.forEach((word) => {
-    if (b.has(word)) shared += 1;
+// Plain word overlap can't tell "both about the NFL" from "the same story":
+// two outlets covering one event share rare proper nouns ("Jagex", "Nemotron"),
+// while unrelated pieces in a topic share its common vocabulary ("season",
+// "predictions"). So weight each word by how rare it is in the batch.
+function buildWeights(tokenSets) {
+  const docFreq = new Map();
+  tokenSets.forEach((set) =>
+    set.forEach((word) => docFreq.set(word, (docFreq.get(word) || 0) + 1))
+  );
+
+  const total = Math.max(1, tokenSets.length);
+  const weights = new Map();
+  docFreq.forEach((count, word) => {
+    weights.set(word, Math.log(1 + total / count));
   });
-  return shared / (a.size + b.size - shared);
+  return weights;
 }
 
-const SAME_STORY = 0.45;
+function weightOf(weights, word) {
+  return weights.get(word) ?? Math.log(2);
+}
+
+// Weighted Jaccard: shared rare words count for much more than shared common ones.
+function similarity(a, b, weights = new Map()) {
+  if (a.size === 0 || b.size === 0) return 0;
+
+  let shared = 0;
+  let union = 0;
+
+  a.forEach((word) => {
+    const w = weightOf(weights, word);
+    union += w;
+    if (b.has(word)) shared += w;
+  });
+  b.forEach((word) => {
+    if (!a.has(word)) union += weightOf(weights, word);
+  });
+
+  return union === 0 ? 0 : shared / union;
+}
+
+// Tuned empirically against a day of live feeds. Biased toward over-merging:
+// losing a story to a false merge is invisible, but the same story twice in a
+// three-item list is the redundancy that makes people stop opening this.
+const SAME_STORY = 0.30;
 
 function ageHours(isoDate) {
   return (Date.now() - new Date(isoDate).getTime()) / 3.6e6;
@@ -135,11 +169,13 @@ function ageHours(isoDate) {
 // remember how many sources carried it — agreement is the strongest signal
 // we can get without a model.
 function cluster(items) {
+  const tokenSets = items.map((item) => titleTokens(item.title));
+  const weights = buildWeights(tokenSets);
   const clusters = [];
 
-  for (const item of items) {
-    const tokens = titleTokens(item.title);
-    const match = clusters.find((c) => similarity(c.tokens, tokens) >= SAME_STORY);
+  items.forEach((item, index) => {
+    const tokens = tokenSets[index];
+    const match = clusters.find((c) => similarity(c.tokens, tokens, weights) >= SAME_STORY);
 
     if (match) {
       match.sources.add(item.source);
@@ -150,7 +186,7 @@ function cluster(items) {
     } else {
       clusters.push({ item, tokens, sources: new Set([item.source]) });
     }
-  }
+  });
 
   return clusters.map((c) => ({
     ...c.item,

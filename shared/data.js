@@ -13,6 +13,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.technologyreview.com/topic/artificial-intelligence/feed/", name: "MIT Tech Review" },
       { url: "https://arstechnica.com/ai/feed/", name: "Ars Technica" },
+      { url: "https://the-decoder.com/feed/", name: "The Decoder" },
+      { url: "https://www.marktechpost.com/feed/", name: "MarkTechPost" },
     ],
   },
   {
@@ -23,6 +25,7 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://grist.org/feed/", name: "Grist" },
       { url: "https://www.carbonbrief.org/feed/", name: "Carbon Brief" },
+      { url: "https://insideclimatenews.org/feed/", name: "Inside Climate News" },
     ],
   },
   {
@@ -33,6 +36,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://spacenews.com/feed/", name: "SpaceNews" },
       { url: "https://www.universetoday.com/feed/", name: "Universe Today" },
+      { url: "https://www.nasa.gov/news-release/feed/", name: "NASA" },
+      { url: "https://arstechnica.com/space/feed/", name: "Ars Technica" },
     ],
   },
   {
@@ -43,6 +48,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://techcrunch.com/feed/", name: "TechCrunch" },
       { url: "https://news.crunchbase.com/feed/", name: "Crunchbase News" },
+      { url: "https://news.ycombinator.com/rss", name: "Hacker News" },
+      { url: "https://sifted.eu/feed", name: "Sifted" },
     ],
   },
   {
@@ -53,6 +60,7 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.statnews.com/feed/", name: "STAT News" },
       { url: "https://feeds.npr.org/1128/rss.xml", name: "NPR Health" },
+      { url: "https://www.sciencedaily.com/rss/health_medicine.xml", name: "ScienceDaily" },
     ],
   },
   {
@@ -63,6 +71,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.polygon.com/rss/index.xml", name: "Polygon" },
       { url: "https://kotaku.com/rss", name: "Kotaku" },
+      { url: "https://www.eurogamer.net/feed", name: "Eurogamer" },
+      { url: "https://www.pcgamer.com/rss/", name: "PC Gamer" },
     ],
   },
   {
@@ -73,6 +83,7 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.smashingmagazine.com/feed/", name: "Smashing Magazine" },
       { url: "https://uxdesign.cc/feed", name: "UX Collective" },
+      { url: "https://www.nngroup.com/feed/rss/", name: "Nielsen Norman" },
     ],
   },
   {
@@ -93,6 +104,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.quantamagazine.org/feed/", name: "Quanta Magazine" },
       { url: "https://www.sciencenews.org/feed", name: "Science News" },
+      { url: "https://www.newscientist.com/feed/home/", name: "New Scientist" },
+      { url: "https://www.sciencedaily.com/rss/all.xml", name: "ScienceDaily" },
     ],
   },
   {
@@ -103,6 +116,8 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.espn.com/espn/rss/news", name: "ESPN" },
       { url: "https://www.cbssports.com/rss/headlines/", name: "CBS Sports" },
+      { url: "https://sports.yahoo.com/rss/", name: "Yahoo Sports" },
+      { url: "https://feeds.bbci.co.uk/sport/rss.xml", name: "BBC Sport" },
     ],
   },
 ];
@@ -112,6 +127,17 @@ const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 // "toolbar" keeps the page clean and lives in the Chrome toolbar;
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";
+
+// Source logos are bundled rather than fetched: no request per headline, and
+// nothing tells a publisher (or a favicon service) what the reader follows.
+// Filenames are slugified source names; see icons/sources/_map.json.
+function sourceIconUrl(sourceName) {
+  const slug = String(sourceName || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug ? chrome.runtime.getURL("icons/sources/" + slug + ".png") : "";
+}
 
 // Local calendar date — the unit the once-a-day check is measured in.
 function todayKey(date) {

@@ -75,13 +75,20 @@ function renderStory(article, isLead) {
     meta.append(fresh, separator());
   }
 
+  const mark = document.createElement("img");
+  mark.className = "story-favicon";
+  mark.src = sourceIconUrl(article.source);
+  mark.alt = "";
+  // A missing logo shouldn't leave a broken-image gap in the row.
+  mark.addEventListener("error", () => mark.remove());
+
   const source = document.createElement("span");
   source.textContent = article.source;
 
   const time = document.createElement("span");
   time.textContent = timeAgo(article.publishedAt);
 
-  meta.append(source, separator(), time);
+  meta.append(mark, source, separator(), time);
   story.append(headline, meta);
   return story;
 }

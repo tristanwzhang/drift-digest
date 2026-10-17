@@ -34,6 +34,13 @@ function renderStory(article, isLead) {
     meta.append(fresh, separator());
   }
 
+  const mark = document.createElement("img");
+  mark.className = "story-favicon";
+  mark.src = sourceIconUrl(article.source);
+  mark.alt = "";
+  // A missing logo shouldn't leave a broken-image gap in the row.
+  mark.addEventListener("error", () => mark.remove());
+
   const source = document.createElement("span");
   source.textContent = article.source;
 
