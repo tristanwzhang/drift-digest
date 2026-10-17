@@ -279,6 +279,36 @@ function cluster(items) {
   });
 }
 
+// Ranking by recency hands every slot to whichever outlet publishes fastest:
+// measured live, Dev.to held all ten top slots in Programming, and Axios
+// outranked the NYT in World purely on volume. Interleaving by source gives
+// each outlet its best story before any outlet gets a second one, so a
+// selective publisher isn't buried by a prolific one.
+function interleaveBySource(ranked, limit) {
+  const bySource = new Map();
+  for (const item of ranked) {
+    if (!bySource.has(item.source)) bySource.set(item.source, []);
+    bySource.get(item.source).push(item);
+  }
+
+  // Sources are visited in the order their best story ranked.
+  const queues = [...bySource.values()];
+  const out = [];
+
+  for (let round = 0; out.length < limit; round += 1) {
+    let placed = false;
+    for (const queue of queues) {
+      if (!queue[round]) continue;
+      out.push(queue[round]);
+      placed = true;
+      if (out.length >= limit) break;
+    }
+    if (!placed) break;
+  }
+
+  return out;
+}
+
 function rank(items) {
   return cluster(items).sort((a, b) => {
     // stories two outlets both covered lead over a single outlet's
@@ -481,8 +511,7 @@ async function doRefresh(only) {
     articles[id] = [];
   });
   order.forEach((id) => {
-    articles[id] = (grouped[id] || [])
-      .slice(0, POOL_PER_TOPIC)
+    articles[id] = interleaveBySource(grouped[id] || [], POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
       // them; it has done its job by now and shouldn't bloat the cache.
       .map(({ topics, ...article }) => article);
