@@ -17,6 +17,8 @@ const TOPIC_STALE_AFTER_MS = 60 * 1000;
 const CACHE_PER_FEED = 15;
 // How many outlets to offer for one story before it stops being useful.
 const MAX_SOURCES_PER_STORY = 5;
+// How many stories the Trending tab gathers.
+const TRENDING_SIZE = 6;
 const MAX_PER_TOPIC = 3;
 // The cache holds more than it shows, so each surface can skip what you've
 // already seen without going back to the network.
@@ -348,6 +350,31 @@ function rank(items) {
     .sort((a, b) => b.score - a.score || new Date(b.publishedAt) - new Date(a.publishedAt));
 }
 
+// The best of everything you follow, in one place. Stories several outlets
+// independently covered come first — that's the clearest evidence something
+// actually matters. If there aren't enough of those, the highest-scoring
+// single-source stories fill the rest rather than leaving it short.
+function buildTrending(ranked) {
+  const corroborated = ranked.filter((item) => item.corroboration > 1);
+  const rest = ranked.filter((item) => item.corroboration === 1);
+
+  const picked = [
+    ...interleaveBySource(corroborated, TRENDING_SIZE),
+    ...interleaveBySource(rest, TRENDING_SIZE),
+  ];
+
+  // One appearance each, keeping the stronger placement.
+  const seen = new Set();
+  const out = [];
+  for (const item of picked) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    out.push(item);
+    if (out.length >= TRENDING_SIZE) break;
+  }
+  return out;
+}
+
 // ---------- fetching ----------
 
 // Validators and parsed items from the last fetch of each feed, so an
@@ -531,7 +558,8 @@ async function doRefresh(only) {
   );
 
   const order = topics.map((topic) => topic.id);
-  const grouped = assignToTopics(rank(fetched.flat()), order);
+  const rankedAll = rank(fetched.flat());
+  const grouped = assignToTopics(rankedAll, order);
 
   // Keep empty topics in the map — "quiet today" is a real answer, and
   // dropping the key would make the panel think the fetch failed.
@@ -541,6 +569,7 @@ async function doRefresh(only) {
   selected.forEach((id) => {
     articles[id] = [];
   });
+  articles[TRENDING_ID] = buildTrending(rankedAll);
   order.forEach((id) => {
     articles[id] = interleaveBySource(grouped[id] || [], POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
@@ -593,7 +622,7 @@ async function syncBubbleScript() {
     await chrome.scripting.registerContentScripts([{
       id: BUBBLE_SCRIPT_ID,
       matches: ["<all_urls>"],
-      js: ["shared/data.js", "content/content.js"],
+      js: ["shared/data.js", "shared/reorder.js", "content/content.js"],
       runAt: "document_idle",
       allFrames: false,
       persistAcrossSessions: true,

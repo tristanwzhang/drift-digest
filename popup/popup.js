@@ -6,6 +6,7 @@ const resetPosBtn = document.getElementById("resetPosBtn");
 const DEFAULT_POS = { xPct: 0.97, yPct: 0.42 };
 
 let selectedTopics = [];
+let tabIds = [];           // Trending first, then your topics in your order
 let articlesByTopic = {};
 let activeTopicId = null;
 let history = { opened: {}, seen: {} };
@@ -246,7 +247,7 @@ function renderTabs() {
   topicTabs.hidden = false;
   topicTabs.textContent = "";
 
-  selectedTopics.forEach((topicId) => {
+  tabIds.forEach((topicId) => {
     const topic = getTopic(topicId);
     if (!topic) return;
 
@@ -254,6 +255,8 @@ function renderTabs() {
     tab.className = "topic-tab";
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(topicId === activeTopicId));
+    tab.dataset.topicId = topicId;
+    if (topicId === TRENDING_ID) tab.classList.add("is-pinned");
     tab.textContent = topic.short || topic.label;
 
     tab.addEventListener("click", () => {
@@ -265,17 +268,30 @@ function renderTabs() {
   });
 }
 
+// Drag a tab to rearrange your dashboard. Trending is pinned first.
+enableTabReorder({
+  container: topicTabs,
+  itemSelector: ".topic-tab",
+  isFixed: (el) => el.dataset.topicId === TRENDING_ID,
+  onReorder: (ids) => {
+    selectedTopics = ids;
+    tabIds = tabOrder(selectedTopics, articlesByTopic);
+    chrome.storage.sync.set({ selected_topics: ids });
+    renderTabs();
+  },
+});
+
 // left/right arrows walk the tab strip
 topicTabs.addEventListener("keydown", (event) => {
   if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
 
-  const index = selectedTopics.indexOf(activeTopicId);
+  const index = tabIds.indexOf(activeTopicId);
   const next =
     event.key === "ArrowRight"
-      ? (index + 1) % selectedTopics.length
-      : (index - 1 + selectedTopics.length) % selectedTopics.length;
+      ? (index + 1) % tabIds.length
+      : (index - 1 + tabIds.length) % tabIds.length;
 
-  selectTopic(selectedTopics[next]);
+  selectTopic(tabIds[next]);
   topicTabs.children[next]?.focus();
   event.preventDefault();
 });
@@ -307,6 +323,7 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
 
   if (selectedTopics.length === 0) {
     activeTopicId = null;
+    tabIds = [];
     showNotice(
       "Nothing to read yet — pick a few topics and Drift keeps a running digest here.",
       "Choose your topics"
@@ -329,9 +346,10 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
     render(topicIds, activeTopicId, reply.articles);
   });
 
-  activeTopicId = selectedTopics.includes(savedTopicId)
-    ? savedTopicId
-    : selectedTopics[0];
+  tabIds = tabOrder(selectedTopics, articlesByTopic);
+
+  // Trending leads unless you were last reading something else.
+  activeTopicId = tabIds.includes(savedTopicId) ? savedTopicId : tabIds[0];
 
   renderTabs();
   renderStories();

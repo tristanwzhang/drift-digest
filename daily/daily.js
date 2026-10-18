@@ -163,7 +163,8 @@ function render(topicIds, articles) {
   digest.textContent = "";
   lastRender = { topicIds, articles };
 
-  const topics = (topicIds || []).map(getTopic).filter(Boolean);
+  // Trending leads the morning read, same as in the panel.
+  const topics = tabOrder(topicIds, articles).map(getTopic).filter(Boolean);
 
   if (topics.length === 0) {
     const empty = document.createElement("div");

@@ -272,6 +272,18 @@ const NEWSLETTER_TOPICS = [
   },
 ];
 
+// Trending isn't a topic you follow — it's the best of everything you already
+// follow, gathered in one place. It has no feeds of its own and never appears
+// in the topic picker.
+const TRENDING_ID = "trending";
+const TRENDING_TOPIC = {
+  id: TRENDING_ID,
+  label: "Trending",
+  short: "Trending",
+  emoji: "🔥",
+  feeds: [],
+};
+
 const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 
 // "toolbar" keeps the page clean and lives in the Chrome toolbar;
@@ -401,7 +413,16 @@ function tooEarlyToOpen(startHour, now) {
 }
 
 function getTopic(topicId) {
+  if (topicId === TRENDING_ID) return TRENDING_TOPIC;
   return NEWSLETTER_TOPICS.find((topic) => topic.id === topicId) || null;
+}
+
+// The tab strip: Trending first, then the topics in the order you arranged
+// them. Trending is omitted when there is nothing worth gathering.
+function tabOrder(selectedTopics, articles) {
+  const topics = (selectedTopics || []).filter((id) => getTopic(id));
+  const hasTrending = (articles?.[TRENDING_ID] || []).length > 0;
+  return hasTrending ? [TRENDING_ID, ...topics] : topics;
 }
 
 // Timestamps are stored as ISO strings and rendered relative, so "2h" stays

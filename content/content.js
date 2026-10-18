@@ -402,6 +402,18 @@
       color: var(--text-dim);
       margin: 0;
     }
+    .topic-tab { user-select: none; touch-action: pan-y; }
+    .topic-tab.is-dragging {
+      opacity: 0.9;
+      z-index: 2;
+      cursor: grabbing;
+    }
+    .topic-tabs.is-reordering .topic-tab:not(.is-dragging) {
+      transition: transform 0.16s ease;
+    }
+    .topic-tab.is-pinned { color: var(--accent); }
+    .topic-tab.is-pinned[aria-selected="true"] { color: var(--accent); }
+
     .story-favicon {
       width: 12px;
       height: 12px;
@@ -715,6 +727,7 @@
   // ---------- render ----------
   // ---------- rendering ----------
   let selectedTopics = [];
+  let tabIds = [];           // Trending first, then your topics in your order
   let articlesByTopic = {};
   let activeTopicId = null;
   let unreadTopics = new Set();
@@ -930,7 +943,7 @@
     topicTabs.hidden = false;
     topicTabs.textContent = "";
 
-    selectedTopics.forEach((topicId) => {
+    tabIds.forEach((topicId) => {
       const topic = getTopic(topicId);
       if (!topic) return;
 
@@ -938,6 +951,8 @@
       tab.className = "topic-tab";
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(topicId === activeTopicId));
+      tab.dataset.topicId = topicId;
+      if (topicId === TRENDING_ID) tab.classList.add("is-pinned");
       tab.textContent = topic.short || topic.label;
 
       if (unreadTopics.has(topicId)) {
@@ -955,17 +970,30 @@
     });
   }
 
+  // Drag a tab to rearrange your dashboard. Trending is pinned first.
+  enableTabReorder({
+    container: topicTabs,
+    itemSelector: ".topic-tab",
+    isFixed: (el) => el.dataset.topicId === TRENDING_ID,
+    onReorder: (ids) => {
+      selectedTopics = ids;
+      tabIds = tabOrder(selectedTopics, articlesByTopic);
+      chrome.storage.sync.set({ selected_topics: ids });
+      renderTabs();
+    },
+  });
+
   // left/right arrows walk the tab strip
   topicTabs.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
 
-    const index = selectedTopics.indexOf(activeTopicId);
+    const index = tabIds.indexOf(activeTopicId);
     const next =
       event.key === "ArrowRight"
-        ? (index + 1) % selectedTopics.length
-        : (index - 1 + selectedTopics.length) % selectedTopics.length;
+        ? (index + 1) % tabIds.length
+        : (index - 1 + tabIds.length) % tabIds.length;
 
-    selectTopic(selectedTopics[next]);
+    selectTopic(tabIds[next]);
     topicTabs.children[next]?.focus();
     event.preventDefault();
   });
@@ -1017,8 +1045,11 @@
       });
     }
 
-    if (!selectedTopics.includes(activeTopicId)) {
-      activeTopicId = selectedTopics[0];
+    tabIds = tabOrder(selectedTopics, articlesByTopic);
+
+    // Trending leads unless you were last reading something else.
+    if (!tabIds.includes(activeTopicId)) {
+      activeTopicId = tabIds[0];
     }
     unreadTopics.delete(activeTopicId);
 

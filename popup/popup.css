@@ -148,6 +148,18 @@ body {
 }
 .topic-tab[aria-selected="true"] .unread { opacity: 0; }
 
+.topic-tab { user-select: none; touch-action: pan-y; }
+.topic-tab.is-dragging {
+  opacity: 0.9;
+  z-index: 2;
+  cursor: grabbing;
+}
+.topic-tabs.is-reordering .topic-tab:not(.is-dragging) {
+  transition: transform 0.16s ease;
+}
+.topic-tab.is-pinned { color: var(--accent); }
+.topic-tab.is-pinned[aria-selected="true"] { color: var(--accent); }
+
 /* ---------- Stories ---------- */
 .popup-body {
   flex: 1 1 auto;
