@@ -688,14 +688,19 @@ function maybeShowDaily() {
 }
 
 async function runDailyCheck() {
-  const today = todayKey();
-  if (checkedDate === today) return;   // only set once we've actually opened
+  const { daily_open: enabled, day_starts_at: startHour } = await chrome.storage.sync.get({
+    daily_open: true,
+    day_starts_at: DAY_STARTS_AT_HOUR,
+  });
+  if (!enabled) return;
 
-  const { daily_open: enabled } = await chrome.storage.sync.get({ daily_open: true });
-  if (!enabled) {
-    checkedDate = today;
-    return;
-  }
+  // Don't greet someone who is up late. This guard is needed on its own: if
+  // yesterday stayed quiet and news lands at 02:00, the shifted date alone
+  // would still let the digest fire in the middle of the night.
+  if (tooEarlyToOpen(startHour)) return;
+
+  const today = todayKey(null, startHour);
+  if (checkedDate === today) return;   // only set once we've actually opened
 
   const stored = await chrome.storage.local.get({ [DAILY_KEY]: null });
   if (stored[DAILY_KEY] === today) {

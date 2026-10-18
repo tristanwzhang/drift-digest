@@ -373,9 +373,17 @@ function sourceIconUrl(sourceName) {
   return slug ? chrome.runtime.getURL("icons/sources/" + slug + ".png") : "";
 }
 
-// Local calendar date — the unit the once-a-day check is measured in.
-function todayKey(date) {
-  const d = date || new Date();
+// A "day" for the check-in starts in the morning, not at midnight. Plenty of
+// people are still working at 00:05, and a digest that greets them then is an
+// interruption rather than a morning briefing.
+const DAY_STARTS_AT_HOUR = 6;
+
+// The calendar date, shifted so the day rolls over at the start hour instead
+// of at midnight: at 02:00 you are still on the previous day.
+function todayKey(date, startHour) {
+  const hour = Number.isInteger(startHour) ? startHour : DAY_STARTS_AT_HOUR;
+  const d = new Date(date ? date.getTime() : Date.now());
+  d.setHours(d.getHours() - hour);
   return (
     d.getFullYear() +
     "-" +
@@ -383,6 +391,13 @@ function todayKey(date) {
     "-" +
     String(d.getDate()).padStart(2, "0")
   );
+}
+
+// Needed on its own, beyond the shifted date: if yesterday stayed quiet and
+// news lands at 02:00, the date alone would still let the digest fire then.
+function tooEarlyToOpen(startHour, now) {
+  const hour = Number.isInteger(startHour) ? startHour : DAY_STARTS_AT_HOUR;
+  return (now || new Date()).getHours() < hour;
 }
 
 function getTopic(topicId) {

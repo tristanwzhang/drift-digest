@@ -2,6 +2,7 @@ const topicGrid = document.getElementById("topicGrid");
 const savedHint = document.getElementById("savedHint");
 const modeCards = Array.from(document.querySelectorAll(".mode-card"));
 const dailyToggle = document.getElementById("dailyToggle");
+const startHour = document.getElementById("startHour");
 const upgradeRow = document.getElementById("upgradeRow");
 const upgradeTitle = document.getElementById("upgradeTitle");
 const upgradeBtn = document.getElementById("upgradeBtn");
@@ -76,12 +77,14 @@ function persist() {
       selected_topics: Array.from(selectedTopics),
       display_mode: displayMode,
       daily_open: dailyToggle.checked,
+      day_starts_at: Number(startHour.value),
     },
     showSavedHint
   );
 }
 
 dailyToggle.addEventListener("change", persist);
+startHour.addEventListener("change", persist);
 
 function renderModes() {
   modeCards.forEach((card) => {
@@ -177,11 +180,13 @@ chrome.storage.sync.get(
     selected_topics: DEFAULT_TOPIC_IDS,
     display_mode: DEFAULT_DISPLAY_MODE,
     daily_open: true,
+    day_starts_at: DAY_STARTS_AT_HOUR,
   },
   (data) => {
     selectedTopics = new Set(data.selected_topics);
     displayMode = data.display_mode;
     dailyToggle.checked = data.daily_open;
+    startHour.value = String(data.day_starts_at);
     renderGrid();
     renderModes();
     findMissingAccess();
