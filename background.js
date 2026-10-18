@@ -123,13 +123,16 @@ function parseFeed(xml, sourceName) {
   const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) || [];
 
   return blocks
-    .map((block) => {
+    .map((block, index) => {
       const title = clean(pickTag(block, "title"));
       return {
         title,
         summary: pickSummary(block, title),
         url: pickLink(block),
         source: sourceName,
+        // Where the outlet placed it. Editors lead with what they think
+        // matters, which is free editorial judgement we'd otherwise discard.
+        feedPosition: index,
         publishedAt: pickDate(block) || new Date().toISOString(),
       };
     })
@@ -232,6 +235,8 @@ function cluster(items) {
       if (new Date(item.publishedAt) < new Date(match.item.publishedAt)) {
         match.item = item;
       }
+      // but credit the best placement any outlet gave it
+      match.bestPosition = Math.min(match.bestPosition, item.feedPosition ?? 9);
     } else {
       clusters.push({
         item,
@@ -239,6 +244,7 @@ function cluster(items) {
         sources: new Set([item.source]),
         topics: [item.topicId],
         members: [item],
+        bestPosition: item.feedPosition ?? 9,
       });
     }
   });
@@ -272,6 +278,7 @@ function cluster(items) {
       ...c.item,
       summary,
       corroboration: c.sources.size,
+      feedPosition: c.bestPosition,
       fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
       topics: c.topics,
       coverage: coverage.length > 1 ? coverage : undefined,
@@ -309,12 +316,36 @@ function interleaveBySource(ranked, limit) {
   return out;
 }
 
+// How much a story matters, from signals we can actually observe. Recency used
+// to decide this on its own, which is why a wallpaper roundup could outrank
+// real news simply by being newer.
+function importance(item) {
+  // Independent outlets choosing the same story is the strongest signal
+  // available without a model, and it outweighs everything else here.
+  const agreement = (item.corroboration - 1) * 3.5;
+
+  // A story that belongs to two of your topics is bigger than one that
+  // belongs to a single corner of your interests.
+  const breadth = (new Set(item.topics || []).size - 1) * 2;
+
+  // Position in the feed: the lead item is the outlet's own front page.
+  const placement = Math.max(0, 1.5 - (item.feedPosition ?? 9) * 0.15);
+
+  // Recency still counts, but it no longer wins on its own.
+  const age = ageHours(item.publishedAt);
+  const freshness = Math.max(0, 3 - age / 10);
+
+  // Agreement shouldn't let a five-day-old story lead a daily digest, so
+  // anything past two days carries a growing drag.
+  const staleness = age > 48 ? (age - 48) / 36 : 0;
+
+  return agreement + breadth + placement + freshness - staleness;
+}
+
 function rank(items) {
-  return cluster(items).sort((a, b) => {
-    // stories two outlets both covered lead over a single outlet's
-    if (b.corroboration !== a.corroboration) return b.corroboration - a.corroboration;
-    return new Date(b.publishedAt) - new Date(a.publishedAt);
-  });
+  return cluster(items)
+    .map((item) => ({ ...item, score: Number(importance(item).toFixed(3)) }))
+    .sort((a, b) => b.score - a.score || new Date(b.publishedAt) - new Date(a.publishedAt));
 }
 
 // ---------- fetching ----------
