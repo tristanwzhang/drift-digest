@@ -64,8 +64,25 @@ Recency alone surfaces filler, so:
 - **"new" means under 24h**, read off the article rather than its position
 - the same story from two sources collapses into one, and agreement between
   independent outlets outranks raw recency
+- two headlines also merge on **enough rare words in common, close enough in
+  time**, not just proportional overlap — a vivid headline was being punished
+  for its own colour, splitting four outlets into two pairs
+- affiliate pages, puzzle answers and sportsbook promos are **dropped at parse
+  time** (~2% of everything fetched); recaps, rankings and listicles are kept
+  but carry a drag and are barred from Trending
 - a topic may return fewer than three items, **including none** — an honest
   "Quiet in X today" beats three pieces of filler
+
+### Trending
+
+Only stories **more than one outlet ran**, so the tab means agreement rather
+than recency. Where a topic sits on the dashboard weights what it contributes:
+the first topic counts for its full score, the last for 40% of it, measured as
+a fraction of the way down the list so it reads the same whether you follow
+three topics or fifteen. The weight is a multiplier, so a genuinely big story
+in your last topic still makes it while a routine one no longer takes a slot
+from the topics you put first. No topic may take more than two of the six
+slots, and on a thin day the tab runs short rather than padding.
 
 ### The daily check-in
 

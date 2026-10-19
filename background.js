@@ -36,6 +36,36 @@ const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
 const BUBBLE_SCRIPT_ID = "drift-bubble";
 
+// ---------- what isn't news ----------
+//
+// Feeds carry more than journalism. Wired's RSS ships its affiliate coupon
+// pages; CBS Sports ships sportsbook promos. Measured over a day of live
+// feeds these are 2% of everything fetched, and every single match was
+// checked by hand — none of them is a story.
+const NOT_NEWS = new RegExp([
+  "\\b(promo|coupon|discount) codes?\\b",
+  "\\bgift guide\\b", "\\bbest gifts\\b",
+  "\\b\\d+% off\\b", "\\b\\$\\d+ off\\b",
+  "\\bdeals?\\b[^.]*\\bfor \\$\\d",
+  "\\bprime day\\b",
+  "\\b(wordle|quordle|connections|crossword|sudoku|strands)\\b[^.]*\\b(answer|answers|hint|hints|clue|clues)\\b",
+  "^crossword\\b", "\\bhoroscope\\b",
+  "\\b(parlay|prop bets|best bets|daily fantasy|dfs)\\b",
+  "\\bbetting (preview|promo)\\b",
+].join("|"), "i");
+
+// Real reporting, but derivative: recaps, rankings, listicles. These are worth
+// keeping for a quiet day in their own topic, and never worth a Trending slot.
+const LOW_VALUE = new RegExp([
+  "\\btakeaways\\b", "\\bwinners and losers\\b", "\\bpower rankings\\b",
+  "\\bmock draft\\b", "\\bwaiver wire\\b", "\\bfantasy (football|baseball|basketball)\\b",
+  "\\bwhat we learned\\b", "\\bthings we learned\\b",
+  "^(the )?\\d+ (best|worst|things|ways|reasons|tips|tricks|gifts|gadgets|alternatives)\\b",
+  "\\bhow to watch\\b", "\\bwhere to watch\\b", "\\bwatch live\\b",
+  "\\b(review )?roundup\\b", "\\bweek in review\\b",
+  "\\bodds, (start )?time\\b", "\\bprediction, odds\\b", "\\bpicks by\\b",
+].join("|"), "i");
+
 // ---------- a small RSS/Atom reader ----------
 // MV3 service workers have no DOM, so DOMParser isn't available here.
 // Feeds are a narrow, predictable shape, so this reads them directly.
@@ -129,6 +159,7 @@ function parseFeed(xml, sourceName) {
       const title = clean(pickTag(block, "title"));
       return {
         title,
+        ...(LOW_VALUE.test(title) ? { lowValue: true } : {}),
         summary: pickSummary(block, title),
         url: pickLink(block),
         source: sourceName,
@@ -138,7 +169,9 @@ function parseFeed(xml, sourceName) {
         publishedAt: pickDate(block) || new Date().toISOString(),
       };
     })
-    .filter((item) => item.title && /^https?:\/\//i.test(item.url));
+    .filter((item) =>
+      item.title && /^https?:\/\//i.test(item.url) && !NOT_NEWS.test(item.title)
+    );
 }
 
 // ---------- ranking ----------
@@ -213,6 +246,43 @@ function similarity(a, b, weights = new Map()) {
 // three-item list is the redundancy that makes people stop opening this.
 const SAME_STORY = 0.30;
 
+// Overlap as a *proportion* of the headline penalises a vivid one. Measured
+// live, the Guardian's "Four people killed in 'violent, fast-moving' fire at
+// Canadian military base" and NPR's "Carney says 4 service members killed ...
+// at Alberta military base" are one story, but the Guardian's extra colour
+// dilutes the ratio below the bar — so four outlets were counted as two
+// pairs, halving the strongest signal there is. A second test catches these:
+// enough rare words in common, close enough in time. Rarity is counted in
+// units of a word seen exactly once in the batch, so the bar doesn't drift
+// as the batch grows.
+const SHARED_WORDS = 3;
+const SHARED_RARITY = 2.6;
+const SAME_STORY_WINDOW_H = 48;
+
+function sharedRarity(a, b, weights) {
+  let weight = 0;
+  let count = 0;
+  a.forEach((word) => {
+    if (!b.has(word)) return;
+    weight += weightOf(weights, word);
+    count += 1;
+  });
+  return { weight, count };
+}
+
+function hoursApart(a, b) {
+  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 3.6e6;
+}
+
+function sameStory(cluster, tokens, item, weights, singleSighting) {
+  if (similarity(cluster.tokens, tokens, weights) >= SAME_STORY) return true;
+
+  const { weight, count } = sharedRarity(cluster.tokens, tokens, weights);
+  if (count < SHARED_WORDS) return false;
+  if (weight < SHARED_RARITY * singleSighting) return false;
+  return hoursApart(item.publishedAt, cluster.item.publishedAt) <= SAME_STORY_WINDOW_H;
+}
+
 function ageHours(isoDate) {
   return (Date.now() - new Date(isoDate).getTime()) / 3.6e6;
 }
@@ -223,11 +293,13 @@ function ageHours(isoDate) {
 function cluster(items) {
   const tokenSets = items.map((item) => titleTokens(item.title));
   const weights = buildWeights(tokenSets);
+  // What one word is worth if it appears exactly once in this batch.
+  const singleSighting = Math.log(1 + Math.max(1, items.length));
   const clusters = [];
 
   items.forEach((item, index) => {
     const tokens = tokenSets[index];
-    const match = clusters.find((c) => similarity(c.tokens, tokens, weights) >= SAME_STORY);
+    const match = clusters.find((c) => sameStory(c, tokens, item, weights, singleSighting));
 
     if (match) {
       match.sources.add(item.source);
@@ -271,17 +343,25 @@ function cluster(items) {
         ...(member.paywall ? { paywall: true } : {}),
       }));
 
-    // The earliest report leads, but if it shipped no summary, borrow one
-    // from another outlet rather than showing a bare headline.
+    // The earliest report leads — but never let a recap speak for the story
+    // it recaps. If any outlet filed the real thing, that's the one shown.
+    const reporting = c.members.filter((member) => !member.lowValue);
+    const candidates = reporting.length ? reporting : c.members;
+    const lead = candidates.reduce((earliest, member) =>
+      new Date(member.publishedAt) < new Date(earliest.publishedAt) ? member : earliest
+    );
+
+    // If it shipped no summary, borrow one from another outlet rather than
+    // showing a bare headline.
     const summary =
-      c.item.summary || c.members.find((member) => member.summary)?.summary || "";
+      lead.summary || c.members.find((member) => member.summary)?.summary || "";
 
     return {
-      ...c.item,
+      ...lead,
       summary,
       corroboration: c.sources.size,
       feedPosition: c.bestPosition,
-      fresh: ageHours(c.item.publishedAt) < FRESH_HOURS,
+      fresh: ageHours(lead.publishedAt) < FRESH_HOURS,
       topics: c.topics,
       coverage: coverage.length > 1 ? coverage : undefined,
     };
@@ -318,6 +398,8 @@ function interleaveBySource(ranked, limit) {
   return out;
 }
 
+const LOW_VALUE_DRAG = 6;
+
 // How much a story matters, from signals we can actually observe. Recency used
 // to decide this on its own, which is why a wallpaper roundup could outrank
 // real news simply by being newer.
@@ -341,7 +423,12 @@ function importance(item) {
   // anything past two days carries a growing drag.
   const staleness = age > 48 ? (age - 48) / 36 : 0;
 
-  return agreement + breadth + placement + freshness - staleness;
+  // A recap of a game is not the game. Heavy enough that derivative pieces
+  // sit below real reporting, light enough that a quiet topic can still
+  // show one rather than nothing.
+  const derivative = item.lowValue ? LOW_VALUE_DRAG : 0;
+
+  return agreement + breadth + placement + freshness - staleness - derivative;
 }
 
 function rank(items) {
@@ -350,28 +437,88 @@ function rank(items) {
     .sort((a, b) => b.score - a.score || new Date(b.publishedAt) - new Date(a.publishedAt));
 }
 
-// The best of everything you follow, in one place. Stories several outlets
-// independently covered come first — that's the clearest evidence something
-// actually matters. If there aren't enough of those, the highest-scoring
-// single-source stories fill the rest rather than leaving it short.
-function buildTrending(ranked) {
-  const corroborated = ranked.filter((item) => item.corroboration > 1);
-  const rest = ranked.filter((item) => item.corroboration === 1);
+// Where a topic sits on your dashboard is a statement about how much you care
+// about it, so Trending reads it that way. The weight is a multiplier rather
+// than a flat penalty, which is the behaviour worth having: a genuinely big
+// story in your last topic still makes it, while a routine one — a contract
+// extension, a player ejected for spitting — no longer takes a slot from the
+// topics you put first.
+// Measured as a fraction of the way down your list rather than a fixed step
+// per place, so it reads the same whether you follow three topics or fifteen:
+// your first topic counts for its full weight, your last for a little over
+// half, everything else in between.
+const TOPIC_SPREAD = 0.6;
 
-  const picked = [
-    ...interleaveBySource(corroborated, TRENDING_SIZE),
-    ...interleaveBySource(rest, TRENDING_SIZE),
-  ];
-
-  // One appearance each, keeping the stronger placement.
-  const seen = new Set();
-  const out = [];
-  for (const item of picked) {
-    if (seen.has(item.url)) continue;
-    seen.add(item.url);
-    out.push(item);
-    if (out.length >= TRENDING_SIZE) break;
+// The topic a story counts as, for Trending's purposes: the highest one it
+// belongs to on your dashboard. A story that is both AI news and sports news
+// is judged as AI news if that's what you ranked higher.
+function leadTopic(item, order) {
+  let best = -1;
+  for (const id of new Set(item.topics || [])) {
+    const index = order.indexOf(id);
+    if (index >= 0 && (best < 0 || index < best)) best = index;
   }
+  return best;
+}
+
+function topicWeight(item, order) {
+  if (order.length < 2) return 1;
+  const index = leadTopic(item, order);
+  const rank = index < 0 ? order.length - 1 : index;
+  return 1 - TOPIC_SPREAD * (rank / (order.length - 1));
+}
+
+// How few corroborated stories still makes a tab worth showing. Below this
+// the gap is topped up, above it Trending simply runs short — padding six
+// slots on a thin day is how a digest fills up with things nobody needed.
+const TRENDING_MIN = 3;
+
+// The best of everything you follow, in one place. A story earns a place by
+// being covered independently by more than one outlet — that is what makes it
+// trending rather than merely recent, and it is the clearest evidence
+// available that something actually matters.
+function buildTrending(ranked, order = []) {
+  // Weighting a negative score by anything would flatter it, so only scores
+  // that earned something get scaled.
+  const weighted = ranked
+    .filter((item) => !item.lowValue)
+    .map((item) => ({
+      item,
+      score: item.score > 0 ? item.score * topicWeight(item, order) : item.score,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.item);
+
+  const corroborated = weighted.filter((item) => item.corroboration > 1);
+  const rest = weighted.filter((item) => item.corroboration === 1);
+
+  // One topic shouldn't be the whole of Trending even if it is your first:
+  // the point of the tab is a look across everything you follow. Capping by
+  // topic rejects candidates, so each shortlist has to be longer than the
+  // number of slots or the tab comes up short for the wrong reason.
+  const shortlist = TRENDING_SIZE * 4;
+  const cap = Math.max(2, Math.ceil(TRENDING_SIZE / Math.max(1, order.length)));
+
+  const seen = new Set();
+  const perTopic = new Map();
+  const out = [];
+
+  function fill(pool, limit) {
+    for (const item of interleaveBySource(pool, shortlist)) {
+      if (out.length >= limit) return;
+      if (seen.has(item.url)) continue;
+      const topic = leadTopic(item, order);
+      if ((perTopic.get(topic) || 0) >= cap) continue;
+      seen.add(item.url);
+      perTopic.set(topic, (perTopic.get(topic) || 0) + 1);
+      out.push(item);
+    }
+  }
+
+  fill(corroborated, TRENDING_SIZE);
+  // Only if agreement alone can't make a usable tab: enough to be worth
+  // opening, and not one story more.
+  if (out.length < TRENDING_MIN) fill(rest, TRENDING_MIN);
   return out;
 }
 
@@ -487,12 +634,19 @@ async function topicStamps() {
 // Keyed so a single-topic refresh doesn't get handed a full refresh's promise.
 const inFlight = new Map();
 
-function refresh(only) {
-  const key = only || "*";
+function refresh(only, fromCache) {
+  const key = (fromCache ? "cache:" : "") + (only || "*");
   if (!inFlight.has(key)) {
-    inFlight.set(key, doRefresh(only).finally(() => inFlight.delete(key)));
+    inFlight.set(key, doRefresh(only, fromCache).finally(() => inFlight.delete(key)));
   }
   return inFlight.get(key);
+}
+
+// Re-rank what's already been fetched. Dragging a topic to a new place on the
+// dashboard changes what Trending thinks is important, which is a question
+// about ranking, not about the network — the feeds have nothing new to say.
+function rerank() {
+  return refresh(undefined, true);
 }
 
 // Called when a surface opens or switches tabs: refetches just that topic if
@@ -521,7 +675,7 @@ async function refreshIfStale() {
   return articles;
 }
 
-async function doRefresh(only) {
+async function doRefresh(only, fromCache) {
   const { selected_topics: selected } = await chrome.storage.sync.get({
     selected_topics: DEFAULT_TOPIC_IDS,
   });
@@ -553,7 +707,7 @@ async function doRefresh(only) {
   const fetched = await Promise.all(
     topics.map((topic, index) =>
       fetchTopicItems(topic, topicFeeds[index], cache, nextCache,
-                      Boolean(only) && topic.id !== only)
+                      fromCache || (Boolean(only) && topic.id !== only))
     )
   );
 
@@ -569,7 +723,7 @@ async function doRefresh(only) {
   selected.forEach((id) => {
     articles[id] = [];
   });
-  articles[TRENDING_ID] = buildTrending(rankedAll);
+  articles[TRENDING_ID] = buildTrending(rankedAll, order);
   order.forEach((id) => {
     articles[id] = interleaveBySource(grouped[id] || [], POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
@@ -578,8 +732,9 @@ async function doRefresh(only) {
   });
 
   const stamp = { articles, feed_cache: nextCache };
-  // A single-topic refresh doesn't make the whole cache fresh.
-  if (!only) stamp.fetched_at = Date.now();
+  // Re-ranking fetched nothing, so it can't make the cache any fresher.
+  if (fromCache) delete stamp.fetched_at;
+  else if (!only) stamp.fetched_at = Date.now();
   else stamp.topic_fetched_at = { ...(await topicStamps()), [only]: Date.now() };
 
   await chrome.storage.local.set(stamp);
@@ -835,9 +990,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // Following a new topic should fill it in right away, not at the next alarm.
+// Merely reordering the ones you already follow shouldn't cost 35 requests,
+// though — that's a drag of the tab strip, and it only changes the ranking.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "sync") return;
-  if (changes.selected_topics) refresh();
+
+  if (changes.selected_topics) {
+    const before = changes.selected_topics.oldValue || [];
+    const after = changes.selected_topics.newValue || [];
+    const sameSet =
+      before.length === after.length && after.every((id) => before.includes(id));
+    if (sameSet) rerank();
+    else refresh();
+  }
+
   if (changes.display_mode) syncBubbleScript();
 });
 

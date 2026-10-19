@@ -37,6 +37,11 @@ proper nouns like *Jagex* or *Nemotron*, while unrelated pieces in a topic share
 its common vocabulary. Measured against a day of live feeds, the unweighted
 version merged **zero** pairs; it was dead code that looked like a feature.
 
+**Where you put a topic is a statement about it.** Dragging topics into your
+own order doesn't just rearrange tabs — it tells Trending how much each one is
+worth. Measured on one day's feeds, moving sports from first to last took it
+from two of the six Trending slots to one, without touching any other signal.
+
 **A quiet day is a real answer.** A topic can return fewer than three stories,
 or none, and says so plainly instead of padding.
 

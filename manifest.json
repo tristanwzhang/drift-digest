@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Drift — Daily Digest",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Two or three fresh headlines per topic you follow, one click away. No feed to scroll, no inbox to clear, no tab to keep open.",
   "action": {
     "default_popup": "popup/popup.html",
