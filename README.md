@@ -37,6 +37,14 @@ proper nouns like *Jagex* or *Nemotron*, while unrelated pieces in a topic share
 its common vocabulary. Measured against a day of live feeds, the unweighted
 version merged **zero** pairs; it was dead code that looked like a feature.
 
+**Agreement alone selects for the generic.** Ranking on how many outlets carry
+a story sounds like a quality signal, and half of it is — but a story everyone
+ran is the one nobody owns. Measured live, the New York Times filed 22 world
+stories in a day and not one was corroborated, so the ranking buried all of
+them beneath a celebrity death that two outlets happened to carry. Drift now
+weights agreement by *whose* agreement it is, and credits an outlet for its
+own front-page judgement.
+
 **Where you put a topic is a statement about it.** Dragging topics into your
 own order doesn't just rearrange tabs — it tells Trending how much each one is
 worth. Measured on one day's feeds, moving sports from first to last took it

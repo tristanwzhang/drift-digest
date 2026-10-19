@@ -70,8 +70,31 @@ Recency alone surfaces filler, so:
 - affiliate pages, puzzle answers and sportsbook promos are **dropped at parse
   time** (~2% of everything fetched); recaps, rankings and listicles are kept
   but carry a drag and are barred from Trending
+- a title that is **mostly** non-Latin script is dropped — judged by majority,
+  never by the presence of one character, so a quoted foreign name survives
+- **editorial standing** scales both agreement and feed placement, because
+  agreement alone rewards commodity news (see below)
 - a topic may return fewer than three items, **including none** — an honest
   "Quiet in X today" beats three pieces of filler
+
+### Editorial standing
+
+Agreement between outlets is the strongest signal available without a model,
+but on its own it selects for the generic: a story five outlets ran is the one
+nobody owns. Measured on a day of live feeds, the New York Times filed 22 world
+stories and **none** were corroborated; its best ranked 13th of 209, below a
+celebrity death two outlets happened to carry. Two outlets agreeing was worth
+3.5 points and a front-page lead at most 1.5, so a marquee desk could not win.
+
+So `SOURCE_STANDING` in `shared/data.js` gives each outlet a number — 1.6 for a
+large accountable newsroom, 1.3 for a serious specialist desk, 1.0 for everyone
+else. It does three things: scales what leading that outlet's feed is worth,
+adds a flat bonus for the outlet's own judgement, and weights corroboration by
+*who* agrees rather than how many. After it, the NYT's best story moved from
+13th to 5th, and from zero slots on screen to five.
+
+This is a judgement call and openly one. It is a claim about editing resources,
+not about who is right.
 
 ### Trending
 

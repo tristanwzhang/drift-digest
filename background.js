@@ -66,6 +66,20 @@ const LOW_VALUE = new RegExp([
   "\\bodds, (start )?time\\b", "\\bprediction, odds\\b", "\\bpicks by\\b",
 ].join("|"), "i");
 
+// A headline a reader of an English digest can't read is not a headline for
+// them. Judged by which script the title is mostly in, never by the presence
+// of a single character: of 1,127 live titles, one was majority non-Latin and
+// none were English headlines that merely quoted a foreign name.
+const FOREIGN_SCRIPT =
+  /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff\u0e00-\u0e7f]/g;
+
+function mostlyForeign(title) {
+  const foreign = (title.match(FOREIGN_SCRIPT) || []).length;
+  if (foreign < 2) return false;
+  const latin = (title.match(/[A-Za-z]/g) || []).length;
+  return foreign > latin;
+}
+
 // ---------- a small RSS/Atom reader ----------
 // MV3 service workers have no DOM, so DOMParser isn't available here.
 // Feeds are a narrow, predictable shape, so this reads them directly.
@@ -170,7 +184,10 @@ function parseFeed(xml, sourceName) {
       };
     })
     .filter((item) =>
-      item.title && /^https?:\/\//i.test(item.url) && !NOT_NEWS.test(item.title)
+      item.title &&
+      /^https?:\/\//i.test(item.url) &&
+      !NOT_NEWS.test(item.title) &&
+      !mostlyForeign(item.title)
     );
 }
 
@@ -356,9 +373,16 @@ function cluster(items) {
     const summary =
       lead.summary || c.members.find((member) => member.summary)?.summary || "";
 
+    // Agreement counted by who agrees, not merely how many. Every outlet
+    // beyond the strongest one carrying the story adds its own standing, so
+    // two wire-copy blogs agreeing is worth less than two desks agreeing.
+    const standings = [...c.sources].map(standingOf).sort((a, b) => b - a);
+    const agreement = standings.slice(1).reduce((sum, value) => sum + value, 0);
+
     return {
       ...lead,
       summary,
+      agreement: Number(agreement.toFixed(3)),
       corroboration: c.sources.size,
       feedPosition: c.bestPosition,
       fresh: ageHours(lead.publishedAt) < FRESH_HOURS,
@@ -399,21 +423,38 @@ function interleaveBySource(ranked, limit) {
 }
 
 const LOW_VALUE_DRAG = 6;
+// Each corroborating outlet's standing is worth this much.
+const AGREEMENT_GAIN = 2.2;
+// What leading a feed is worth, before the outlet's standing scales it.
+const PLACEMENT_LEAD = 2.5;
+const PLACEMENT_STEP = 0.25;
+// What an outlet's standing is worth on its own.
+const AUTHORITY_GAIN = 4;
 
 // How much a story matters, from signals we can actually observe. Recency used
 // to decide this on its own, which is why a wallpaper roundup could outrank
 // real news simply by being newer.
 function importance(item) {
-  // Independent outlets choosing the same story is the strongest signal
-  // available without a model, and it outweighs everything else here.
-  const agreement = (item.corroboration - 1) * 3.5;
+  const standing = standingOf(item.source);
+
+  // Independent outlets choosing the same story remains the strongest signal
+  // available without a model — but weighted by whose judgement it is.
+  const agreement = (item.agreement || 0) * AGREEMENT_GAIN;
 
   // A story that belongs to two of your topics is bigger than one that
   // belongs to a single corner of your interests.
   const breadth = (new Set(item.topics || []).size - 1) * 2;
 
-  // Position in the feed: the lead item is the outlet's own front page.
-  const placement = Math.max(0, 1.5 - (item.feedPosition ?? 9) * 0.15);
+  // Position in the feed is the outlet's own front page, and it is worth
+  // more from an outlet that files a dozen considered stories a day than from
+  // one that files sixty — leading a feed nobody edits is not a judgement.
+  const placement =
+    Math.max(0, PLACEMENT_LEAD - (item.feedPosition ?? 9) * PLACEMENT_STEP) * standing;
+
+  // And the standing itself: a front-page lead from a large accountable
+  // newsroom is worth surfacing even when nobody else has picked it up yet.
+  // Without this the ranking quietly prefers whatever is most duplicated.
+  const authority = (standing - 1) * AUTHORITY_GAIN;
 
   // Recency still counts, but it no longer wins on its own.
   const age = ageHours(item.publishedAt);
@@ -428,7 +469,7 @@ function importance(item) {
   // show one rather than nothing.
   const derivative = item.lowValue ? LOW_VALUE_DRAG : 0;
 
-  return agreement + breadth + placement + freshness - staleness - derivative;
+  return agreement + authority + breadth + placement + freshness - staleness - derivative;
 }
 
 function rank(items) {

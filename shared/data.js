@@ -16,6 +16,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://the-decoder.com/feed/", name: "The Decoder" },
       { url: "https://www.marktechpost.com/feed/", name: "MarkTechPost" },
       { url: "https://www.wired.com/feed/rss", name: "Wired" },
+      { url: "https://feeds.content.dowjones.io/public/rss/RSSWSJD", name: "The Wall Street Journal", paywall: true },
     ],
   },
   {
@@ -30,6 +31,9 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.theguardian.com/world/rss", name: "The Guardian" },
       { url: "https://api.axios.com/feed/", name: "Axios" },
       { url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", name: "The New York Times", paywall: true },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", name: "The New York Times", paywall: true },
+      { url: "https://feeds.content.dowjones.io/public/rss/RSSWorldNews", name: "The Wall Street Journal", paywall: true },
+      { url: "https://www.pbs.org/newshour/feeds/rss/headlines", name: "PBS NewsHour" },
     ],
   },
   {
@@ -43,6 +47,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.semafor.com/rss.xml", name: "Semafor" },
       { url: "https://www.propublica.org/feeds/propublica/main", name: "ProPublica" },
       { url: "https://www.theatlantic.com/feed/all/", name: "The Atlantic", paywall: true },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml", name: "The New York Times", paywall: true },
     ],
   },
   {
@@ -69,6 +74,8 @@ const NEWSLETTER_TOPICS = [
       { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", name: "CNBC" },
       { url: "https://feeds.bloomberg.com/markets/news.rss", name: "Bloomberg", paywall: true },
       { url: "https://www.ft.com/rss/home", name: "Financial Times", paywall: true },
+      { url: "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", name: "The Wall Street Journal", paywall: true },
+      { url: "https://www.economist.com/latest/rss.xml", name: "The Economist", paywall: true },
     ],
   },
   {
@@ -80,6 +87,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://krebsonsecurity.com/feed/", name: "Krebs on Security" },
       { url: "https://www.bleepingcomputer.com/feed/", name: "BleepingComputer" },
       { url: "https://feeds.feedburner.com/TheHackersNews", name: "The Hacker News" },
+      { url: "https://www.404media.co/rss/", name: "404 Media" },
     ],
   },
   {
@@ -103,7 +111,7 @@ const NEWSLETTER_TOPICS = [
     feeds: [
       { url: "https://www.quantamagazine.org/feed/", name: "Quanta Magazine" },
       { url: "https://www.sciencenews.org/feed", name: "Science News" },
-      { url: "https://www.newscientist.com/feed/home/", name: "New Scientist" },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml", name: "The New York Times", paywall: true },
       { url: "https://www.sciencedaily.com/rss/all.xml", name: "ScienceDaily" },
       { url: "https://www.nature.com/nature.rss", name: "Nature" },
       { url: "https://www.science.org/rss/news_current.xml", name: "Science" },
@@ -141,6 +149,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.statnews.com/feed/", name: "STAT News" },
       { url: "https://feeds.npr.org/1128/rss.xml", name: "NPR Health" },
       { url: "https://www.sciencedaily.com/rss/health_medicine.xml", name: "ScienceDaily" },
+      { url: "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml", name: "The New York Times", paywall: true },
     ],
   },
   {
@@ -268,6 +277,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://www.cbssports.com/rss/headlines/", name: "CBS Sports" },
       { url: "https://sports.yahoo.com/rss/", name: "Yahoo Sports" },
       { url: "https://feeds.bbci.co.uk/sport/rss.xml", name: "BBC Sport" },
+      { url: "https://defector.com/feed", name: "Defector" },
     ],
   },
 ];
@@ -275,6 +285,79 @@ const NEWSLETTER_TOPICS = [
 // Trending isn't a topic you follow — it's the best of everything you already
 // follow, gathered in one place. It has no feeds of its own and never appears
 // in the topic picker.
+// ---------- editorial standing ----------
+//
+// Agreement between outlets is a strong signal, but on its own it rewards
+// commodity news: a story five outlets ran is the one nobody owns. Measured
+// over a day of live feeds, the New York Times filed 22 world stories and not
+// one of them was corroborated — its best ranked 13th of 209, below a
+// celebrity death that two outlets happened to carry. The signal protecting
+// against junk was also filtering out the reporting worth reading.
+//
+// So an outlet's own judgement counts for something. This is a judgement call
+// and openly one: a number per outlet, not a claim about who is right. 1.6 is
+// a large accountable newsroom whose front page is a considered decision; 1.3
+// is a serious specialist desk; everything unlisted is 1.0 and competes on the
+// story alone.
+const MARQUEE = 1.6;
+const SPECIALIST = 1.3;
+
+const SOURCE_STANDING = {
+  "The New York Times": MARQUEE,
+  "The Wall Street Journal": MARQUEE,
+  "Financial Times": MARQUEE,
+  "The Economist": MARQUEE,
+  "Bloomberg": MARQUEE,
+  "The Guardian": MARQUEE,
+  "BBC World": MARQUEE,
+  "NPR World": MARQUEE,
+  "NPR Politics": MARQUEE,
+  "NPR Health": MARQUEE,
+  "PBS NewsHour": MARQUEE,
+  "The Atlantic": MARQUEE,
+  "The New Yorker": MARQUEE,
+  "ProPublica": MARQUEE,
+  "Nature": MARQUEE,
+  "Science": MARQUEE,
+
+  "Al Jazeera": SPECIALIST,
+  "Axios": SPECIALIST,
+  "Politico": SPECIALIST,
+  "Semafor": SPECIALIST,
+  "Reuters": SPECIALIST,
+  "Ars Technica": SPECIALIST,
+  "MIT Tech Review": SPECIALIST,
+  "Wired": SPECIALIST,
+  "The Verge": SPECIALIST,
+  "404 Media": SPECIALIST,
+  "Rest of World": SPECIALIST,
+  "IEEE Spectrum": SPECIALIST,
+  "TechCrunch": SPECIALIST,
+  "Quanta Magazine": SPECIALIST,
+  "Science News": SPECIALIST,
+  "New Scientist": SPECIALIST,
+  "STAT News": SPECIALIST,
+  "CNBC": SPECIALIST,
+  "MarketWatch": SPECIALIST,
+  "Krebs on Security": SPECIALIST,
+  "SpaceNews": SPECIALIST,
+  "NASA": SPECIALIST,
+  "Carbon Brief": SPECIALIST,
+  "Inside Climate News": SPECIALIST,
+  "Grist": SPECIALIST,
+  "Nielsen Norman": SPECIALIST,
+  "Dezeen": SPECIALIST,
+  "Variety": SPECIALIST,
+  "Billboard": SPECIALIST,
+  "Pitchfork": SPECIALIST,
+  "Defector": SPECIALIST,
+  "ESPN": SPECIALIST,
+};
+
+function standingOf(source) {
+  return SOURCE_STANDING[source] || 1;
+}
+
 const TRENDING_ID = "trending";
 const TRENDING_TOPIC = {
   id: TRENDING_ID,
