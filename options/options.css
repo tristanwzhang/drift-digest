@@ -46,13 +46,21 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 30px;
   font-weight: 400;
-  margin-bottom: 26px;
+  letter-spacing: -0.01em;
+  margin-bottom: 30px;
 }
-.brand-dot { width: 18px; height: 1px; background: var(--accent); }
+/* The mark carries its own rounded square, so it needs no frame of its own. */
+.brand-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: block;
+  flex: 0 0 auto;
+}
 
 .page-header h1 {
   font-family: var(--serif);

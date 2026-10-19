@@ -63,6 +63,8 @@ body {
   letter-spacing: 0.01em;
 }
 .brand-rule { width: 16px; height: 1px; background: var(--accent); }
+
+.header-actions { display: flex; align-items: center; gap: 2px; }
 .icon-btn {
   width: 26px;
   height: 26px;

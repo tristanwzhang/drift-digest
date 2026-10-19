@@ -397,4 +397,8 @@ resetPosBtn.addEventListener("click", () => {
 });
 
 document.getElementById("settingsBtn").addEventListener("click", openOptions);
+
+// A popup closes when you click the page behind it, but that means clicking
+// into whatever you were reading. This is the way out that doesn't disturb it.
+document.getElementById("closeBtn").addEventListener("click", () => window.close());
 document.getElementById("manageBtn").addEventListener("click", openOptions);
