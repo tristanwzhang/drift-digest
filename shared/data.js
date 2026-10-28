@@ -441,6 +441,10 @@ function originsForTopics(topicIds) {
 // bury it.
 const SEEN_DEMOTE_AT = 3;
 
+// The most a tab shows. Not a quota: the service worker only passes on stories
+// that clear its quality bar, so a tab can hold anything from this down to none.
+const STORIES_PER_TAB = 8;
+
 // The cache holds a pool per topic; this trims it against what you've already
 // read. Opened stories drop out entirely — you've read them. Stories shown
 // repeatedly and ignored fall behind fresher ones but aren't deleted, so a
@@ -458,7 +462,7 @@ function pickStories(pool, history, limit) {
     (count >= SEEN_DEMOTE_AT ? behind : ahead).push(article);
   }
 
-  return [...ahead, ...behind].slice(0, limit ?? 3);
+  return [...ahead, ...behind].slice(0, limit ?? STORIES_PER_TAB);
 }
 
 // Source logos are bundled rather than fetched: no request per headline, and

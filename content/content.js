@@ -334,6 +334,7 @@
       text-transform: uppercase;
       color: var(--accent);
     }
+    .story-kicker .kicker-topic ~ .kicker-reach { color: var(--text-dim); }
     .story-related { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 18px 10px; margin-top: -3px; }
     .related-angle {
       display: flex;
@@ -802,7 +803,7 @@
   }
 
   function renderStories() {
-    const articles = pickStories(articlesByTopic[activeTopicId], history, 3);
+    const articles = pickStories(articlesByTopic[activeTopicId], history, STORIES_PER_TAB);
 
     panelBody.textContent = "";
 
@@ -819,7 +820,10 @@
     }
 
     articles.forEach((article, index) => {
-      panelBody.appendChild(renderStory(article, { lead: index === 0 }));
+      panelBody.appendChild(renderStory(article, {
+        lead: index === 0,
+        tags: activeTopicId === TRENDING_ID ? trendingTags(article) : [],
+      }));
     });
 
     // You looked at this tab, so these have had their turn.
@@ -840,6 +844,8 @@
     chrome.storage.local.set({ active_topic: topicId });
     renderTabs();
     renderStories();
+    // A new tab starts at its top story, not wherever the last one was scrolled.
+    panelBody.scrollTop = 0;
     updateBadge();
     refreshActiveTopic();
   }
@@ -949,7 +955,7 @@
       // first load — everything is new
       unreadTopics = new Set(
         selectedTopics.filter((id) =>
-          pickStories(articlesByTopic[id], history, 3).some((a) => a.fresh)
+          pickStories(articlesByTopic[id], history, STORIES_PER_TAB).some((a) => a.fresh)
         )
       );
     } else {

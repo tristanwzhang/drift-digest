@@ -50,7 +50,7 @@ function sameArticles(a, b) {
 }
 
 function renderStories() {
-  let articles = pickStories(articlesByTopic[activeTopicId], history, 3);
+  let articles = pickStories(articlesByTopic[activeTopicId], history, STORIES_PER_TAB);
   let held = [];
 
   if (unprompted) {
@@ -74,7 +74,11 @@ function renderStories() {
   }
 
   articles.forEach((article, index) => {
-    body.appendChild(renderStory(article, { lead: index === 0, images: showImages }));
+    body.appendChild(renderStory(article, {
+      lead: index === 0,
+      images: showImages,
+      tags: activeTopicId === TRENDING_ID ? trendingTags(article) : [],
+    }));
   });
 
   if (held.length) {
@@ -107,6 +111,8 @@ function selectTopic(topicId) {
   chrome.storage.local.set({ active_topic: topicId });
   renderTabs();
   renderStories();
+  // A new tab starts at its top story, not wherever the last one was scrolled.
+  body.scrollTop = 0;
   refreshActiveTopic();
 }
 

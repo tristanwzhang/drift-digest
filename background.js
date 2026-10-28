@@ -17,14 +17,24 @@ const TOPIC_STALE_AFTER_MS = 60 * 1000;
 const CACHE_PER_FEED = 15;
 // How many outlets to offer for one story before it stops being useful.
 const MAX_SOURCES_PER_STORY = 5;
-// How many stories the Trending tab gathers.
-const TRENDING_SIZE = 6;
-const MAX_PER_TOPIC = 3;
+// How many stories the Trending tab gathers, at most.
+const TRENDING_SIZE = STORIES_PER_TAB;
 // The cache holds more than it shows, so each surface can skip what you've
-// already seen without going back to the network.
-const POOL_PER_TOPIC = 8;
-// A week-old item is not "what's new" — better to show nothing than to pad.
-const MAX_AGE_HOURS = 168;
+// already read without going back to the network.
+const POOL_PER_TOPIC = STORIES_PER_TAB + 4;
+// What a story has to score to be shown at all. A tab holds every story that
+// clears it, up to STORIES_PER_TAB, and none if none do — a fixed three meant
+// a slow topic padded itself with "UX Disciplines: Glossary" while a busy one
+// hid its fourth-best story. 5 is what an ordinary outlet's own lead earns in
+// its first few hours; anything less needs another outlet, a scoop, or a
+// bigger newsroom behind it. Trending asks more, after weighting by where the
+// topic sits on your dashboard.
+const STORY_FLOOR = 5;
+const TRENDING_FLOOR = 8;
+// Two days. Long enough to cover a day you didn't open the browser; short
+// enough that nothing here is old news. A slow topic goes quiet sooner than
+// it did at a week, and that's the intended trade — see NOTES.md.
+const MAX_AGE_HOURS = 48;
 // Only this recent earns the "new" marker.
 const FRESH_HOURS = 24;
 const FETCH_TIMEOUT_MS = 10000;
@@ -76,7 +86,8 @@ const LOW_VALUE = new RegExp([
   "\\b(nba|nfl|mlb|nhl|ncaa|college football|college basketball) picks\\b",
   // Archives and asides: a closed live blog, a clip, a quiz about the news.
   "\\bas it happened\\b", "^watch:", "^quiz:", "\\((video|podcast|audio)\\)$",
-  "^news wrap:", "^who said it\\b", "\\bnews quiz\\b",
+  "^news wrap:", "^who said it\\b", "\\b(news|daily) quiz\\b",
+  "\\bnewsletter:", "^here.s the latest\\.?$",
 ].join("|"), "i");
 
 // Two unrelated stories in one headline is a briefing, not a report: NPR's
@@ -263,12 +274,21 @@ function pickDate(block) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+// A live blog's title leads with its date — "Stock Market News, Oct. 27, 2026:
+// Tech Stocks Extend Gains" — which a dated card already says. The headline is
+// what follows the colon.
+const DATED_PREFIX = /^[^:]{3,40}, (jan|feb|mar|apr|may|june?|july?|aug|sept?|oct|nov|dec)[a-z]*\.? \d{1,2}, \d{4}: (?=\S)/i;
+
+function tidyTitle(title) {
+  return title.replace(DATED_PREFIX, "");
+}
+
 function parseFeed(xml, sourceName) {
   const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) || [];
 
   return blocks
     .map((block, index) => {
-      const title = clean(pickTag(block, "title"));
+      const title = tidyTitle(clean(pickTag(block, "title")));
       return {
         title,
         ...(LOW_VALUE.test(title) || BRIEFING.test(title) ? { lowValue: true } : {}),
@@ -586,10 +606,6 @@ function importance(item) {
   const age = ageHours(item.publishedAt);
   const freshness = Math.max(0, 3 - age / 10);
 
-  // Agreement shouldn't let a five-day-old story lead a daily digest, so
-  // anything past two days carries a growing drag.
-  const staleness = age > 48 ? (age - 48) / 36 : 0;
-
   // A recap of a game is not the game. Heavy enough that derivative pieces
   // sit below real reporting, light enough that a quiet topic can still
   // show one rather than nothing.
@@ -599,7 +615,7 @@ function importance(item) {
   const stakes = STAKES.test(item.title) ? STAKES_GAIN * standing : 0;
 
   return agreement + authority + breadth + placement + freshness + scoop + stakes
-    - staleness - derivative;
+    - derivative;
 }
 
 function byScore(a, b) {
@@ -791,6 +807,14 @@ function withEvents(stories) {
 
   const outlets = events.map((members) =>
     new Set(members.flatMap((index) => outletsOf(stories[index]))).size);
+  // How much of the event was filed under each topic, for Trending's tags.
+  const reach = events.map((members) => {
+    const counts = {};
+    for (const index of members) {
+      for (const id of stories[index].topics || []) counts[id] = (counts[id] || 0) + 1;
+    }
+    return counts;
+  });
 
   return stories.map((story, index) => {
     const id = eventOf[index];
@@ -822,6 +846,7 @@ function withEvents(stories) {
       score: story.score + heat,
       event: id,
       eventOutlets: size,
+      eventTopics: reach[id],
       ...(related.length ? { related } : {}),
     };
   });
@@ -863,46 +888,71 @@ function leadTopic(item, order) {
   return best;
 }
 
-function topicWeight(item, order) {
+// home: the tab the story's event lives in, when known. It decides, rather
+// than the highest topic the story touches — Al Jazeera files a Barcelona fine
+// in its world feed, and that was enough to give a sports story World's weight.
+function topicWeight(item, order, home) {
   if (order.length < 2) return 1;
-  const index = leadTopic(item, order);
+  const index = home !== undefined && home !== null ? order.indexOf(home) : leadTopic(item, order);
   const rank = index < 0 ? order.length - 1 : index;
   return 1 - TOPIC_SPREAD * (rank / (order.length - 1));
 }
-
-// How few corroborated stories still makes a tab worth showing. Below this
-// the gap is topped up, above it Trending simply runs short — padding six
-// slots on a thin day is how a digest fills up with things nobody needed.
-const TRENDING_MIN = 3;
 
 // The best of everything you follow, in one place. A story earns a place by
 // being covered independently by more than one outlet — that is what makes it
 // trending rather than merely recent, and it is the clearest evidence
 // available that something actually matters.
-function buildTrending(ranked, order = []) {
+// A topic shows as a tag on Trending if it carries at least this share of the
+// event's coverage. Measured live, Anthropic's IPO had been filed under five
+// topics — one stray Al Jazeera piece made it "World" — and five tags is a
+// list, not a label.
+const TAG_SHARE = 0.25;
+const MAX_TAGS = 2;
+
+// Tags for one story: the tab it lives in first, since that's where you'll
+// find it, then any other topic carrying a real share of the coverage.
+function tagsFor(item, order, home) {
+  const counts = item.eventTopics || {};
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const tags = home ? [home] : [];
+  for (const id of order) {
+    if (tags.length >= MAX_TAGS) break;
+    if (!tags.includes(id) && (counts[id] || 0) >= TAG_SHARE * total) tags.push(id);
+  }
+  return tags;
+}
+
+function buildTrending(ranked, order = [], homes = new Map()) {
   // Weighting a negative score by anything would flatter it, so only scores
   // that earned something get scaled.
   const weighted = ranked
     .filter((item) => !item.lowValue)
     .map((item) => ({
       item,
-      score: item.score > 0 ? item.score * topicWeight(item, order) : item.score,
+      score: item.score > 0 ? item.score * topicWeight(item, order, homes.get(item.event)) : item.score,
     }))
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.item);
+    .sort((a, b) => b.score - a.score);
 
   // Several outlets on the same event counts, even when no two of them wrote
   // the same headline — that is what most big news looks like.
   const covered = (item) => Math.max(item.corroboration, item.eventOutlets || 0) > 1;
-  const corroborated = onePerEvent(weighted.filter(covered));
-  const rest = onePerEvent(weighted.filter((item) => !covered(item)));
+  const corroborated = onePerEvent(
+    weighted
+      .filter((entry) => covered(entry.item) && entry.score >= TRENDING_FLOOR)
+      .map((entry) => entry.item)
+  );
 
   // One topic shouldn't be the whole of Trending even if it is your first:
   // the point of the tab is a look across everything you follow. Capping by
   // topic rejects candidates, so each shortlist has to be longer than the
   // number of slots or the tab comes up short for the wrong reason.
+  // Counted by the tab a story lives in, not the highest topic it touches:
+  // World's feeds — a newspaper's front page among them — carry a little of
+  // everything, so by that measure nearly every big story was "World" and the
+  // cap left Trending three stories long.
   const shortlist = TRENDING_SIZE * 4;
-  const cap = Math.max(2, Math.ceil(TRENDING_SIZE / Math.max(1, order.length)));
+  const cap = Math.max(TRENDING_SIZE / 2, Math.ceil(TRENDING_SIZE / Math.max(1, order.length)));
+  const tabOf = (item) => homes.get(item.event) ?? leadTopic(item, order);
 
   const seen = new Set();
   const perTopic = new Map();
@@ -912,7 +962,7 @@ function buildTrending(ranked, order = []) {
     for (const item of interleaveBySource(pool, shortlist)) {
       if (out.length >= limit) return;
       if (seen.has(item.url) || seen.has("event:" + item.event)) continue;
-      const topic = leadTopic(item, order);
+      const topic = tabOf(item);
       if ((perTopic.get(topic) || 0) >= cap) continue;
       seen.add(item.url);
       seen.add("event:" + item.event);
@@ -921,11 +971,16 @@ function buildTrending(ranked, order = []) {
     }
   }
 
+  // No topping up from single-outlet stories: on a thin day Trending runs
+  // short, or empty, rather than calling something trending that isn't.
   fill(corroborated, TRENDING_SIZE);
-  // Only if agreement alone can't make a usable tab: enough to be worth
-  // opening, and not one story more.
-  if (out.length < TRENDING_MIN) fill(rest, TRENDING_MIN);
-  return out;
+
+  // Which of your topics each story is under, in your own order, so a mixed
+  // tab says where everything came from. The bookkeeping fields go no further.
+  return out.map(({ topics, eventTopics, ...item }) => ({
+    ...item,
+    tags: tagsFor({ eventTopics }, order, homes.get(item.event)),
+  }));
 }
 
 // ---------- fetching ----------
@@ -1124,7 +1179,7 @@ function assignToTopics(clusters, topicOrder) {
 // event, for a reader who opens all three tabs. It lives where most of its
 // coverage was filed, your own topic order breaking ties; the other angles
 // still show beneath it.
-function homeEvents(grouped, order) {
+function eventHomes(grouped, order) {
   const tally = new Map();
   order.forEach((id) => {
     for (const story of grouped[id] || []) {
@@ -1142,7 +1197,10 @@ function homeEvents(grouped, order) {
     }
     home.set(event, best);
   });
+  return home;
+}
 
+function homeEvents(grouped, order, home = eventHomes(grouped, order)) {
   const out = {};
   order.forEach((id) => {
     out[id] = (grouped[id] || []).filter((story) => home.get(story.event) === id);
@@ -1239,7 +1297,9 @@ async function doRefresh(only, fromCache) {
 
   const order = topics.map((topic) => topic.id);
   const rankedAll = rank(fetched.flat());
-  const grouped = homeEvents(assignToTopics(rankedAll, order), order);
+  const assigned = assignToTopics(rankedAll, order);
+  const homes = eventHomes(assigned, order);
+  const grouped = homeEvents(assigned, order, homes);
 
   // Keep empty topics in the map — "quiet today" is a real answer, and
   // dropping the key would make the panel think the fetch failed.
@@ -1249,12 +1309,13 @@ async function doRefresh(only, fromCache) {
   selected.forEach((id) => {
     articles[id] = [];
   });
-  articles[TRENDING_ID] = buildTrending(rankedAll, order);
+  articles[TRENDING_ID] = buildTrending(rankedAll, order, homes);
   order.forEach((id) => {
-    articles[id] = interleaveBySource(onePerEvent(grouped[id] || []), POOL_PER_TOPIC)
+    const good = onePerEvent(grouped[id] || []).filter((story) => story.score >= STORY_FLOOR);
+    articles[id] = interleaveBySource(good, POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
       // them; it has done its job by now and shouldn't bloat the cache.
-      .map(({ topics, ...article }) => article);
+      .map(({ topics, eventTopics, ...article }) => article);
   });
 
   const stamp = { articles, feed_cache: nextCache, feed_health: health };
@@ -1372,7 +1433,7 @@ async function unreadTopicCount(articles) {
 
   let count = 0;
   for (const id of selected) {
-    const picked = pickStories(articles[id], history, 3);
+    const picked = pickStories(articles[id], history, STORIES_PER_TAB);
     if (picked.some((article) => article.fresh)) count += 1;
   }
   return count;

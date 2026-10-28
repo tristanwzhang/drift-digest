@@ -408,6 +408,8 @@ body {
   color: var(--accent);
 }
 
+.story-kicker .kicker-topic ~ .kicker-reach { color: var(--text-dim); }
+
 /* A thumbnail beside the headline; the lead gets the picture across the top. */
 .story.has-image {
   display: grid;

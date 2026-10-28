@@ -1,7 +1,8 @@
 # Drift
 
-**A browser digest that's worth opening.** Two or three current headlines per
-topic you follow, behind one icon in your toolbar. No feed to scroll, no inbox
+**A browser digest that's worth opening.** Only the headlines worth your time
+for each topic you follow — as many as clear the bar, none if none do — behind
+one icon in your toolbar. No feed to scroll, no inbox
 to clear, no tab to keep open.
 
 A Chrome extension (Manifest V3), no build step, no dependencies, no backend.
@@ -23,7 +24,7 @@ reach you.
 
 ## What that meant in practice
 
-**Recency is not relevance.** Items older than a week are dropped rather than
+**Recency is not relevance.** Items older than two days are dropped rather than
 used as filler. "New" means published in the last 24 hours, read off the
 article itself rather than its position in the list — so a slow topic's lead
 story never claims to be fresh when it isn't.
@@ -58,8 +59,9 @@ own order doesn't just rearrange tabs — it tells Trending how much each one is
 worth. Measured on one day's feeds, moving sports from first to last took it
 from two of the six Trending slots to one, without touching any other signal.
 
-**A quiet day is a real answer.** A topic can return fewer than three stories,
-or none, and says so plainly instead of padding.
+**A quiet day is a real answer.** There's no quota. A story has to clear a
+quality bar to be shown; a busy topic shows up to eight, a slow one may show
+none, and says so plainly instead of padding.
 
 **It remembers you.** Stories you opened drop out. Stories shown repeatedly and
 ignored fall behind newer ones. Clustering runs across all your topics at once,

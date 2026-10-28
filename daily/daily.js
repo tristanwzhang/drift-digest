@@ -14,7 +14,7 @@ function openOptions() {
 }
 
 function renderTopic(topic, pool) {
-  let articles = pickStories(pool, history, 3);
+  let articles = pickStories(pool, history, STORIES_PER_TAB);
 
   if (unprompted) {
     const { shown, held } = partitionForUnprompted(articles);
@@ -36,7 +36,11 @@ function renderTopic(topic, pool) {
     section.appendChild(quiet);
   } else {
     articles.forEach((article, index) => {
-      section.appendChild(renderStory(article, { lead: index === 0, images: showImages }));
+      section.appendChild(renderStory(article, {
+        lead: index === 0,
+        images: showImages,
+        tags: topic.id === TRENDING_ID ? trendingTags(article) : [],
+      }));
     });
   }
 
@@ -69,7 +73,7 @@ function render(topicIds, articles) {
     return;
   }
 
-  const shown = topics.flatMap((topic) => pickStories(articles[topic.id], history, 3));
+  const shown = topics.flatMap((topic) => pickStories(articles[topic.id], history, STORIES_PER_TAB));
   const fresh = shown.filter((article) => article.fresh).length;
 
   chrome.runtime.sendMessage({

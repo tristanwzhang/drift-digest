@@ -1,6 +1,6 @@
 # Drift
 
-A browser digest. Two or three fresh headlines per topic you follow, one click
+A browser digest. The headlines worth reading in each topic you follow, one click
 away on any page — no feed to scroll, no inbox to clear, no tab to keep open.
 
 ## Running it
@@ -60,7 +60,9 @@ in-flight request.
 
 Recency alone surfaces filler, so:
 
-- items older than **168h** are dropped entirely
+- items older than **48h** are dropped entirely. It was a week, with a growing
+  drag after two days; measured on 23 topics, every one still had stories
+  inside 48h, though Design (7) and Food (8) get thin
 - **"new" means under 24h**, read off the article rather than its position
 - the same story from two sources collapses into one, and agreement between
   independent outlets outranks raw recency
@@ -74,8 +76,14 @@ Recency alone surfaces filler, so:
   never by the presence of one character, so a quoted foreign name survives
 - **editorial standing** scales both agreement and feed placement, because
   agreement alone rewards commodity news (see below)
-- a topic may return fewer than three items, **including none** — an honest
-  "Quiet in X today" beats three pieces of filler
+- **no quota**: a story must score **5** to be shown — what an ordinary
+  outlet's own lead earns in its first few hours; anything less needs another
+  outlet, a scoop, or a bigger newsroom. A tab shows up to **8**, and may show
+  **none** — an honest "Quiet in X today" beats filler. A fixed three had a
+  slow topic padding with "UX Disciplines: Glossary" while a busy one hid its
+  fourth-best story
+- dated live-blog prefixes are trimmed: "Stock Market News, Oct. 27, 2026:
+  Tech Stocks Extend Gains" shows as "Tech Stocks Extend Gains"
 - a headline that **breaks news only one desk has** ("Scoop:", "Exclusive:",
   "documents show") or reports **a large change** ("crash", "ousted",
   "historic", "trillion") gets a bonus scaled by the outlet's standing. Both
@@ -160,8 +168,22 @@ the first topic counts for its full score, the last for 40% of it, measured as
 a fraction of the way down the list so it reads the same whether you follow
 three topics or fifteen. The weight is a multiplier, so a genuinely big story
 in your last topic still makes it while a routine one no longer takes a slot
-from the topics you put first. No topic may take more than two of the six
-slots, and on a thin day the tab runs short rather than padding.
+from the topics you put first. A story must score **8** after that weighting,
+up to eight stories, with no topping up from single-outlet stories — a thin
+day runs short, or empty.
+
+Weighting and the per-topic cap (half the slots) both go by the **tab the
+event lives in**, not the highest topic a story touches. World's feeds — a
+newspaper front page among them — carry a little of everything, so by the old
+measure nearly every big story was "World": the cap left Trending three
+stories long, and Al Jazeera filing a Barcelona fine under World gave a sports
+story World's weight. On the same day's news, Sports last now takes no
+Trending slots; Sports first takes three.
+
+Each Trending story is **tagged** with the tab it lives in, plus any other
+topic carrying at least a quarter of the event's coverage — at most two.
+Anthropic's IPO had been filed under five topics; five tags is a list, not a
+label.
 
 ### The daily check-in
 

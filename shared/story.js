@@ -122,7 +122,34 @@ const COVERAGE_BADGE_FROM = 3;
 
 // lead controls size only. The "new" marker comes from the article's own
 // freshness, so a slow topic's lead never claims to be new when it isn't.
-function renderStory(article, { lead = false, images = false } = {}) {
+function storyKicker(tags, outlets) {
+  const showReach = outlets >= COVERAGE_BADGE_FROM;
+  if (!tags.length && !showReach) return null;
+
+  const kicker = document.createElement("p");
+  kicker.className = "story-kicker";
+
+  tags.forEach((label, index) => {
+    if (index) kicker.appendChild(document.createTextNode(" · "));
+    const tag = document.createElement("span");
+    tag.className = "kicker-topic";
+    tag.textContent = label;
+    kicker.appendChild(tag);
+  });
+
+  if (showReach) {
+    const reach = document.createElement("span");
+    reach.className = "kicker-reach";
+    reach.textContent = (tags.length ? " · " : "") + outlets + " outlets";
+    reach.title = outlets + " outlets are covering this";
+    kicker.appendChild(reach);
+  }
+  return kicker;
+}
+
+// tags: topic names to show above the headline — given on Trending only,
+// where they say something; inside a topic's own tab they'd only repeat it.
+function renderStory(article, { lead = false, images = false, tags = [] } = {}) {
   const story = document.createElement("a");
   story.className = lead ? "story lead" : "story";
   story.href = article.url;
@@ -139,16 +166,11 @@ function renderStory(article, { lead = false, images = false } = {}) {
   const text = document.createElement("div");
   text.className = "story-text";
 
-  // Above the headline, where a front page puts its kicker: the size of the
-  // story is the first thing worth knowing about it, and the meta row is
-  // already full on a narrow card.
-  if ((article.eventOutlets || 0) >= COVERAGE_BADGE_FROM) {
-    const kicker = document.createElement("p");
-    kicker.className = "story-kicker";
-    kicker.textContent = article.eventOutlets + " outlets";
-    kicker.title = article.eventOutlets + " outlets are covering this";
-    text.appendChild(kicker);
-  }
+  // Above the headline, where a front page puts its kicker: which section it
+  // belongs to (on Trending, where sections mix) and how big the story is.
+  // The meta row is already full on a narrow card.
+  const kicker = storyKicker(tags, article.eventOutlets || 0);
+  if (kicker) text.appendChild(kicker);
 
   const headline = document.createElement("p");
   headline.className = "story-title";
@@ -199,4 +221,9 @@ function renderStory(article, { lead = false, images = false } = {}) {
   if (angles.length) wrap.appendChild(relatedRow(angles));
   if (others.length) wrap.appendChild(coverageRow(others));
   return wrap;
+}
+
+// Trending's tags for a story: the short names of the topics it's under.
+function trendingTags(article) {
+  return (article.tags || []).map((id) => getTopic(id)?.short).filter(Boolean);
 }

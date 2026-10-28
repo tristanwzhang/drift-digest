@@ -4,8 +4,8 @@
 Drift — Daily Digest
 
 ## Short description (132 char max)
-Two or three fresh headlines per topic you follow, one click away. No feed to
-scroll, no inbox to clear, no tab to keep open.
+Only the headlines worth reading in each topic you follow, one click away. No
+endless feed, no inbox to clear, no tab to keep open.
 
 ## Category
 News & Weather
@@ -16,8 +16,8 @@ Keeping up shouldn't mean a feed that never ends.
 
 Drift puts a short digest behind one icon in your toolbar. Pick the topics you
 care about — AI, climate, space, startups, health, gaming, design, finance,
-science, sports — and Drift keeps two or three current headlines for each,
-ready whenever you want them. Click one to read it at the source.
+science, sports — and Drift keeps the stories worth your time in each, ready
+whenever you want them. Click one to read it at the source.
 
 **Built to be worth opening**
 
@@ -25,12 +25,12 @@ Most readers show you whatever was published most recently. That's how you end
 up with a wallpaper roundup at the top of a design feed and a week-old article
 wearing a "new" badge. Drift does more work before anything reaches you:
 
-- Anything older than a week is dropped rather than used as filler
+- Anything older than two days is dropped rather than used as filler
 - "New" means published in the last 24 hours — never a label on a stale item
 - When two independent outlets cover the same story, Drift merges them and
   ranks that story higher, because agreement is a signal
-- A topic can show fewer than three stories, or none at all. A quiet day is
-  reported honestly instead of padded
+- There's no quota: a busy topic shows up to eight stories, a slow one may
+  show none. A quiet day is reported honestly instead of padded
 
 **It remembers where you were**
 
