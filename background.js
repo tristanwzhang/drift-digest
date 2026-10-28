@@ -32,6 +32,13 @@ const FETCH_TIMEOUT_MS = 10000;
 // Truncation happens at parse time so a full body never reaches the cache:
 // this is a lead to help you decide, not a copy of the piece.
 const SUMMARY_MAX = 150;
+// Feeds are 91 dependencies nobody here controls, and they rot quietly:
+// ESPN answered HTTP 202 with an empty body for nine days and the Sports tab
+// simply had one less source. A feed that keeps failing is asked less often
+// rather than never, so it can come back on its own.
+const FEED_FAIL_GRACE = 3;
+const FEED_BACKOFF_BASE_MS = 60 * 60 * 1000;
+const FEED_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
 const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
 const BUBBLE_SCRIPT_ID = "drift-bubble";
@@ -567,6 +574,65 @@ function buildTrending(ranked, order = []) {
 
 // Validators and parsed items from the last fetch of each feed, so an
 // unchanged feed costs one 304 and no parsing.
+// How long to leave a repeatedly failing feed alone: an hour after the third
+// failure, doubling to a day. Long enough to stop hammering a host that is
+// down, short enough that a feed fixed this morning is back by lunchtime.
+function backoffFor(record) {
+  if (!record || (record.fails || 0) < FEED_FAIL_GRACE) return 0;
+  const steps = record.fails - FEED_FAIL_GRACE;
+  return Math.min(FEED_BACKOFF_MAX_MS, FEED_BACKOFF_BASE_MS * 2 ** steps);
+}
+
+function restingUntil(record) {
+  return (record?.lastFail || 0) + backoffFor(record);
+}
+
+function recordHealth(health, feed, result) {
+  const now = Date.now();
+  const previous = health[feed.url] || {};
+
+  if (result.ok) {
+    health[feed.url] = { name: feed.name, fails: 0, lastOk: now };
+    return;
+  }
+
+  health[feed.url] = {
+    name: feed.name,
+    fails: (previous.fails || 0) + 1,
+    lastOk: previous.lastOk || null,
+    lastFail: now,
+    // When it first broke, so settings can say how long it's been gone.
+    since: previous.since || now,
+    error: result.error || "unknown",
+  };
+}
+
+async function readFeedHealth() {
+  const { feed_health: health } = await chrome.storage.local.get({ feed_health: {} });
+
+  // Drop records for feeds that no longer exist, so unfollowing a topic or
+  // replacing a dead source doesn't leave a ghost in settings forever.
+  const known = new Set();
+  for (const topic of NEWSLETTER_TOPICS) {
+    for (const feed of topic.feeds) known.add(feed.url);
+  }
+  for (const url of Object.keys(health)) {
+    if (!known.has(url)) delete health[url];
+  }
+  return health;
+}
+
+// Asking again right now, on purpose: clears the backoff so a source the
+// person can see is broken gets one more try without waiting out the rest.
+async function recheckFeeds() {
+  const health = await readFeedHealth();
+  for (const record of Object.values(health)) {
+    if (record.fails) record.lastFail = 0;
+  }
+  await chrome.storage.local.set({ feed_health: health });
+  return refresh();
+}
+
 async function readFeedCache() {
   const { feed_cache: cache } = await chrome.storage.local.get({ feed_cache: {} });
   return cache;
@@ -586,15 +652,23 @@ async function fetchFeed(feed, cache) {
 
     // Nothing new since last time — the publisher sent no body at all.
     if (response.status === 304 && previous?.items) {
-      return { items: previous.items, entry: previous, changed: false };
+      return { ok: true, items: previous.items, entry: previous, changed: false };
     }
 
     if (!response.ok) throw new Error("HTTP " + response.status);
 
     const items = parseFeed(await response.text(), feed.name);
+
+    // A success code carrying nothing is a failure wearing a disguise: ESPN
+    // answers 202 with an empty body, which passes every ok check and then
+    // parses to zero items. Treated as success it would overwrite a good
+    // cache with nothing, so the feed loses even its fallback.
+    if (!items.length) throw new Error("no items (HTTP " + response.status + ")");
+
     // Carried through to the UI so a reader knows before clicking, not after.
     if (feed.paywall) items.forEach((item) => { item.paywall = true; });
     return {
+      ok: true,
       items,
       entry: {
         etag: response.headers.get("ETag") || null,
@@ -604,21 +678,42 @@ async function fetchFeed(feed, cache) {
       changed: true,
     };
   } catch (error) {
-    // One dead feed shouldn't empty a topic. Fall back to whatever we had.
+    // One dead feed shouldn't empty a topic. Fall back to whatever we had,
+    // and keep the old cache entry rather than replacing it with nothing.
     console.warn("[Drift] feed failed:", feed.url, error.message);
-    return { items: previous?.items || [], entry: previous, changed: false };
+    return {
+      ok: false,
+      error: error.message,
+      items: previous?.items || [],
+      entry: previous,
+      changed: false,
+    };
   } finally {
     clearTimeout(timer);
   }
 }
 
 // Raw items for one topic, tagged so clustering can run across all of them.
-async function fetchTopicItems(topic, feeds, cache, nextCache, skipNetwork) {
+async function fetchTopicItems(topic, feeds, cache, nextCache, skipNetwork, health) {
+  const now = Date.now();
+  const fromCache = (feed) => ({
+    items: cache[feed.url]?.items || [],
+    entry: cache[feed.url],
+    changed: false,
+  });
+
   // Clustering runs across every topic, so a single-topic refresh still needs
   // the others' items — it just takes them from cache instead of the network.
   const results = skipNetwork
-    ? feeds.map((feed) => ({ items: cache[feed.url]?.items || [], entry: cache[feed.url], changed: false }))
-    : await Promise.all(feeds.map((feed) => fetchFeed(feed, cache)));
+    ? feeds.map(fromCache)
+    : await Promise.all(feeds.map((feed) => {
+        // A feed that has failed repeatedly is resting, not abandoned.
+        if (health && now < restingUntil(health[feed.url])) return fromCache(feed);
+        return fetchFeed(feed, cache).then((result) => {
+          if (health) recordHealth(health, feed, result);
+          return result;
+        });
+      }));
 
   feeds.forEach((feed, index) => {
     if (results[index].entry) nextCache[feed.url] = results[index].entry;
@@ -744,11 +839,12 @@ async function doRefresh(only, fromCache) {
   const topicFeeds = reachable.filter((feeds) => feeds.length > 0);
 
   const cache = await readFeedCache();
+  const health = await readFeedHealth();
   const nextCache = {};
   const fetched = await Promise.all(
     topics.map((topic, index) =>
       fetchTopicItems(topic, topicFeeds[index], cache, nextCache,
-                      fromCache || (Boolean(only) && topic.id !== only))
+                      fromCache || (Boolean(only) && topic.id !== only), health)
     )
   );
 
@@ -772,7 +868,7 @@ async function doRefresh(only, fromCache) {
       .map(({ topics, ...article }) => article);
   });
 
-  const stamp = { articles, feed_cache: nextCache };
+  const stamp = { articles, feed_cache: nextCache, feed_health: health };
   // Re-ranking fetched nothing, so it can't make the cache any fresher.
   if (fromCache) delete stamp.fetched_at;
   else if (!only) stamp.fetched_at = Date.now();
@@ -1082,6 +1178,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "REFRESH_TOPIC") {
     refreshTopicIfStale(message.topicId).then((articles) => sendResponse({ articles }));
+    return true;
+  }
+
+  if (message?.type === "RECHECK_FEEDS") {
+    recheckFeeds().then(() => sendResponse({ ok: true }));
     return true;
   }
 

@@ -278,6 +278,7 @@ const NEWSLETTER_TOPICS = [
       { url: "https://sports.yahoo.com/rss/", name: "Yahoo Sports" },
       { url: "https://feeds.bbci.co.uk/sport/rss.xml", name: "BBC Sport" },
       { url: "https://defector.com/feed", name: "Defector" },
+      { url: "https://www.theguardian.com/sport/rss", name: "The Guardian" },
     ],
   },
 ];

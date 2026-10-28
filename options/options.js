@@ -6,6 +6,9 @@ const startHour = document.getElementById("startHour");
 const upgradeRow = document.getElementById("upgradeRow");
 const upgradeTitle = document.getElementById("upgradeTitle");
 const upgradeBtn = document.getElementById("upgradeBtn");
+const healthSection = document.getElementById("healthSection");
+const healthList = document.getElementById("healthList");
+const recheckBtn = document.getElementById("recheckBtn");
 
 // Topics you already follow can gain new publishers in an update. Permission
 // was only ever asked for at the moment you picked the topic, so there has to
@@ -42,6 +45,79 @@ upgradeBtn.addEventListener("click", () => {
       showNotice("Thanks — those sources will appear at the next refresh.");
     }
   });
+});
+
+// A feed is only worth mentioning once it has failed enough times to be a
+// pattern rather than a blip — a publisher's five-minute outage is not news.
+const HEALTH_REPORT_AFTER = 3;
+
+function sinceText(ms) {
+  if (!ms) return "";
+  const hours = (Date.now() - ms) / 3.6e6;
+  if (hours < 1) return "just now";
+  if (hours < 48) return `${Math.round(hours)}h`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+function topicsUsing(url) {
+  return NEWSLETTER_TOPICS
+    .filter((topic) => topic.feeds.some((feed) => feed.url === url))
+    .map((topic) => topic.short || topic.label);
+}
+
+function renderHealth(health) {
+  const broken = Object.entries(health || {})
+    .filter(([, record]) => (record.fails || 0) >= HEALTH_REPORT_AFTER)
+    // Only mention a source the person actually follows.
+    .filter(([url]) => topicsUsing(url).some((label) =>
+      [...selectedTopics].some((id) => {
+        const topic = getTopic(id);
+        return topic && (topic.short || topic.label) === label;
+      })))
+    .sort((a, b) => (a[1].since || 0) - (b[1].since || 0));
+
+  healthSection.hidden = broken.length === 0;
+  healthList.textContent = "";
+
+  for (const [url, record] of broken) {
+    const row = document.createElement("li");
+
+    const name = document.createElement("span");
+    name.className = "health-name";
+    name.textContent = record.name || new URL(url).hostname;
+
+    const topic = document.createElement("span");
+    topic.className = "health-topic";
+    topic.textContent = topicsUsing(url)[0] || "";
+
+    const detail = document.createElement("span");
+    detail.className = "health-detail";
+    const gone = sinceText(record.since);
+    detail.textContent = gone ? `quiet ${gone} · ${record.error}` : record.error;
+
+    row.append(name, topic, detail);
+    healthList.appendChild(row);
+  }
+}
+
+async function refreshHealth() {
+  const { feed_health: health } = await chrome.storage.local.get({ feed_health: {} });
+  renderHealth(health);
+}
+
+recheckBtn.addEventListener("click", () => {
+  recheckBtn.disabled = true;
+  recheckBtn.textContent = "Checking…";
+  chrome.runtime.sendMessage({ type: "RECHECK_FEEDS" }, () => {
+    recheckBtn.disabled = false;
+    recheckBtn.textContent = "Check again now";
+    refreshHealth();
+  });
+});
+
+// The worker writes health as it fetches, so settings left open stays current.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.feed_health) renderHealth(changes.feed_health.newValue);
 });
 
 let selectedTopics = new Set();
@@ -190,5 +266,6 @@ chrome.storage.sync.get(
     renderGrid();
     renderModes();
     findMissingAccess();
+    refreshHealth();
   }
 );

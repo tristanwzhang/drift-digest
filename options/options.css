@@ -169,6 +169,62 @@ body {
   color: var(--badge-ink);
 }
 
+/* ---------- Source health ---------- */
+.health-section { margin-bottom: 44px; }
+.health-section[hidden] { display: none; }
+
+.health-intro {
+  margin: -4px 0 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  max-width: 60ch;
+}
+
+.health-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.health-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.health-list li + li { margin-top: 7px; }
+
+.health-name { font-size: 13.5px; font-weight: 600; flex: 0 0 auto; }
+.health-topic {
+  font-family: var(--code);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.health-detail {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-left: auto;
+  text-align: right;
+}
+
+.ghost-btn {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 15px;
+  border: none;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  cursor: pointer;
+  transition: background 0.14s ease, box-shadow 0.14s ease;
+}
+.ghost-btn:hover { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--accent-dim); }
+.ghost-btn:disabled { opacity: 0.55; cursor: default; }
+
 /* ---------- Where it lives ---------- */
 .mode-section { margin-bottom: 10px; }
 

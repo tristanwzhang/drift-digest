@@ -37,6 +37,14 @@ proper nouns like *Jagex* or *Nemotron*, while unrelated pieces in a topic share
 its common vocabulary. Measured against a day of live feeds, the unweighted
 version merged **zero** pairs; it was dead code that looked like a feature.
 
+**Things you depend on rot quietly.** Drift reads 92 feeds it doesn't control.
+ESPN started answering HTTP 202 with an empty body — a success code carrying
+nothing — and the Sports tab lost a source for nine days without a word. That
+status also passed every "did it work" check, so the empty result overwrote the
+cached copy, destroying the fallback meant for exactly this. Feeds now carry a
+health record, back off when they keep failing, recover on their own, and are
+listed in settings when they stop answering.
+
 **Agreement alone selects for the generic.** Ranking on how many outlets carry
 a story sounds like a quality signal, and half of it is — but a story everyone
 ran is the one nobody owns. Measured live, the New York Times filed 22 world

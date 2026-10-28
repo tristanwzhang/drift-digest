@@ -77,6 +77,22 @@ Recency alone surfaces filler, so:
 - a topic may return fewer than three items, **including none** — an honest
   "Quiet in X today" beats three pieces of filler
 
+### Feed health
+
+91 feeds are 91 dependencies nobody here controls, and they rot quietly. ESPN
+began answering **HTTP 202 with an empty body** and the Sports tab simply had
+one fewer source for nine days, with nothing said. Worse, 202 passes every
+`response.ok` check, so an empty parse was treated as success and overwrote
+that feed's cache with nothing — destroying its own fallback.
+
+- a success code carrying zero items is a **failure**, and never replaces cache
+- `feed_health` in `chrome.storage.local` counts consecutive failures per feed
+- after 3, the feed rests: one hour, doubling to a day. Resting, not abandoned —
+  the window expires on its own, so a feed fixed this morning is back by lunch
+- settings lists sources that stopped answering, how long, and why, with a
+  "check again now" that clears the backoff
+- records for feeds no longer in any topic are pruned
+
 ### Editorial standing
 
 Agreement between outlets is the strongest signal available without a model,
