@@ -69,7 +69,7 @@ const NOT_NEWS = new RegExp([
   "\\bdeals?\\b[^.]*\\bfor \\$\\d",
   "\\bprime day\\b",
   "\\b(wordle|quordle|connections|crossword|sudoku|strands)\\b[^.]*\\b(answer|answers|hint|hints|clue|clues)\\b",
-  "^crossword\\b", "\\bhoroscope\\b",
+  "^crossword\\b", "\\bhoroscope\\b", "^sign up for\\b",
   "\\b(parlay|prop bets|best bets|daily fantasy|dfs)\\b",
   "\\bbetting (preview|promo)\\b",
 ].join("|"), "i");
@@ -281,8 +281,13 @@ function pickDate(block) {
 // what follows the colon.
 const DATED_PREFIX = /^[^:]{3,40}, (jan|feb|mar|apr|may|june?|july?|aug|sept?|oct|nov|dec)[a-z]*\.? \d{1,2}, \d{4}: (?=\S)/i;
 
+// Designboom writes every headline in lower case, which reads as a typo in a
+// serif headline set beside everyone else's. Only a title with no capital
+// anywhere is touched, and only its first letter.
 function tidyTitle(title) {
-  return title.replace(DATED_PREFIX, "");
+  const trimmed = title.replace(DATED_PREFIX, "");
+  if (/[A-Z]/.test(trimmed)) return trimmed;
+  return trimmed.replace(/^[a-z]/, (letter) => letter.toUpperCase());
 }
 
 function parseFeed(xml, sourceName) {
@@ -563,8 +568,9 @@ const AUTHORITY_GAIN = 4;
 // They scale with the outlet's standing: an exclusive is a claim, and it is
 // worth what the newsroom making it is worth.
 const SCOOP = new RegExp([
-  "^(exclusive|scoop)\\b", "\\bexclusive:", "\\bin exclusive talks\\b",
+  "^(exclusive|scoop)\\b", "\\bexclusive:",
   "\\b(obtained by|documents show|records show|leaked)\\b",
+  "\\bin (advanced |early |exclusive )?talks (to|with|for|over)\\b",
   "\\bsecret(ly)? (court|ruling|memo|deal|plan|talks|program|meeting|recording|files|documents|payments)\\b",
   "\\bhiding a secret\\b",
 ].join("|"), "i");

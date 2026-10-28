@@ -85,6 +85,8 @@ Recency alone surfaces filler, so:
   **none** — an honest "Quiet in X today" beats filler. A fixed three had a
   slow topic padding with "UX Disciplines: Glossary" while a busy one hid its
   fourth-best story
+- headlines in all lower case (Designboom's house style) get a capital first
+  letter, and nothing else
 - dated live-blog prefixes are trimmed: "Stock Market News, Oct. 27, 2026:
   Tech Stocks Extend Gains" shows as "Tech Stocks Extend Gains"
 - a headline that **breaks news only one desk has** ("Scoop:", "Exclusive:",
