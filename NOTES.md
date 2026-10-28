@@ -76,6 +76,45 @@ Recency alone surfaces filler, so:
   agreement alone rewards commodity news (see below)
 - a topic may return fewer than three items, **including none** — an honest
   "Quiet in X today" beats three pieces of filler
+- a headline that **breaks news only one desk has** ("Scoop:", "Exclusive:",
+  "documents show") or reports **a large change** ("crash", "ousted",
+  "historic", "trillion") gets a bonus scaled by the outlet's standing. Both
+  lists are narrow and were checked by hand against a live day; "the secret to
+  slower aging" is a formula, not a scoop, and doesn't match
+
+### Events
+
+Clustering finds the same *article* told twice. It can't see that "Rivals in
+Israel Election Strike Tone of Triumph" and "Israeli turnout hits three-decade
+high" are one *event*. Measured on a live day, the three biggest stories in the
+world — Anthropic's IPO (20 headlines, 12 outlets), Lula's upset in Brazil, and
+Israel's election (28 headlines, 12 outlets) — each reached the ranking as a
+scatter of single-outlet stories, while World spent all three slots on Israel.
+
+So stories are grouped a second time, into events:
+
+- a story joins an event if it shares **two or more words** with the event's
+  strongest story, at least one of them a **name**, within 48h. Star-shaped on
+  purpose: joining the seed only, never whatever joined last, stops one
+  briefing headline from chaining two events together
+- **names are learned from the batch**: a word capitalised mid-sentence in
+  sentence-case headlines. Title Case headlines are ignored for this
+- words are cut to **six letters** so Israel/Israeli and Brazil/Brazilian match;
+  fixed phrases ("Trump administration", "World Series") are kept whole
+- rarity alone can't tell an event from a beat — Democrats+Republicans share
+  headlines every day. A link needs **a genuinely rare word**, or a pairing that
+  **keeps recurring today**: Israel+election shared 29 headlines, Anthropic+IPO
+  24, Democrats+Republicans 4. The bar is 6
+- **heat**: from three outlets an event earns `3 × log2(outlets / 2)`, so the
+  twelfth outlet says much less than the third
+- **one story per event** in any list, and **one tab per event** — the tab
+  where most of its coverage was filed, your topic order breaking ties.
+  Bolsonaro's flight had led World, Politics and Finance at once
+- the lead shows **two other angles** from other outlets beneath it, and any
+  story on a 3+ outlet event carries an "N outlets" kicker
+- derivative pieces (quizzes, recaps, two-story briefings) no longer count
+  toward agreement — a quiz naming the same person isn't a second desk deciding
+  the story matters
 
 ### Feed health
 
@@ -114,8 +153,9 @@ not about who is right.
 
 ### Trending
 
-Only stories **more than one outlet ran**, so the tab means agreement rather
-than recency. Where a topic sits on the dashboard weights what it contributes:
+Only stories **more than one outlet covered** — the same headline, or the same
+event in different words — so the tab means agreement rather than recency.
+One story per event. Where a topic sits on the dashboard weights what it contributes:
 the first topic counts for its full score, the last for 40% of it, measured as
 a fraction of the way down the list so it reads the same whether you follow
 three topics or fifteen. The weight is a multiplier, so a genuinely big story
@@ -135,8 +175,19 @@ back to opening `daily/daily.html` in a tab.
 
 MV3 service workers have no DOM, so there's no `DOMParser`. `background.js`
 contains a small hand-rolled RSS/Atom reader instead of pulling in a dependency.
-It handles both formats, CDATA and numeric entities. Verified against live
-TechCrunch and Quanta feeds: 25 items, zero malformed, no leftover markup.
+It handles both formats, CDATA, numeric entities, and double-encoded accents
+(PBS ships "Mbapp&amp;eacute;"). Verified against live TechCrunch and Quanta
+feeds: 25 items, zero malformed, no leftover markup.
+
+**Pictures** come from `media:content`, `media:thumbnail` or an image
+`enclosure` (largest declared width wins), falling back to the first `<img>` in
+the body — but never a GIF, a declared width under 100, or anything that looks
+like a pixel: NerdWallet ships a tracking pixel in every item. 64% of items
+carry one. Several outlets link the camera original (Semafor 2MB, CBS 2.3MB,
+Politico 8.5MB), so the BBC, NPR, Semafor, CBS, WSJ and MarketWatch image
+services are asked for an 800px copy; each rewrite was checked to return a real
+image. Politico's service takes no width, so Politico goes without. Median
+picture after resizing: 82KB.
 
 ## Known gaps
 

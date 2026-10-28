@@ -393,3 +393,92 @@ body {
 }
 .footer-link:hover { color: var(--accent); }
 .footer-link[hidden] { display: none; }
+
+/* ---------- Pictures, kickers, other angles (shared/story.js) ---------- */
+.story-text { min-width: 0; }
+.story-meta { flex-wrap: wrap; row-gap: 4px; }
+
+.story-kicker {
+  margin: 0 0 4px;
+  font-family: var(--code);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* A thumbnail beside the headline; the lead gets the picture across the top. */
+.story.has-image {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  column-gap: 14px;
+  align-items: start;
+}
+.story.has-image .story-text { grid-column: 1; grid-row: 1; }
+.story.has-image .story-image { grid-column: 2; grid-row: 1; margin-top: 3px; }
+.story.lead.has-image { display: block; }
+
+.story-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.story.lead .story-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  margin: 2px 0 12px;
+}
+.story-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.story-image.is-loaded img { opacity: 1; }
+.story:hover .story-image img { filter: brightness(1.03); }
+@media (prefers-reduced-motion: reduce) {
+  .story-image img { transition: none; }
+}
+
+.story-related {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 18px 10px;
+  margin-top: -3px;
+}
+.related-angle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline);
+  text-decoration: none;
+  color: var(--text-dim);
+  transition: color 0.15s ease;
+}
+.related-angle:hover { color: var(--text); }
+.related-angle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.related-mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.related-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--serif);
+  font-size: 12.5px;
+  line-height: 1.4;
+}

@@ -324,6 +324,40 @@
 
     .story-wrap { display: block; }
 
+    .story-text { min-width: 0; }
+    .story-kicker {
+      margin: 0 0 4px;
+      font-family: var(--code);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .story-related { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 18px 10px; margin-top: -3px; }
+    .related-angle {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-top: 1px solid var(--hairline);
+      text-decoration: none;
+      color: var(--text-dim);
+      transition: color 0.15s ease;
+    }
+    .related-angle:hover { color: var(--text); }
+    .related-mark { width: 12px; height: 12px; border-radius: 2px; object-fit: contain; flex: 0 0 auto; }
+    .related-title {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-family: var(--serif);
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+
     .story-sources {
       display: flex;
       flex-wrap: wrap;
@@ -394,8 +428,10 @@
 
     .story-meta {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      row-gap: 4px;
       font-family: var(--code);
       font-size: 10.5px;
       letter-spacing: 0.02em;
@@ -755,12 +791,6 @@
     panelBody.appendChild(notice);
   }
 
-  function separator() {
-    const dot = document.createElement("span");
-    dot.className = "sep";
-    return dot;
-  }
-
   // Identity of a topic's stories, so we can tell a real update from a no-op.
   function topicSignature(articles) {
     return (articles || []).map((article) => article.url).join("|");
@@ -769,120 +799,6 @@
   function sameArticles(a, b) {
     const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
     return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
-  }
-
-  // Knowing before you click beats discovering after.
-  function paywallTag() {
-    const tag = document.createElement("span");
-    tag.className = "paywall-tag";
-    tag.textContent = "paywall";
-    tag.title = "This source may ask you to subscribe";
-    return tag;
-  }
-
-  // One story, several outlets: pick who you'd rather read it from.
-  function coverageRow(others) {
-    const row = document.createElement("div");
-    row.className = "story-sources";
-
-    const label = document.createElement("span");
-    label.className = "sources-label";
-    label.textContent = "also in";
-    row.appendChild(label);
-
-    for (const other of others) {
-      const chip = document.createElement("a");
-      chip.className = "source-chip";
-      chip.href = other.url;
-      chip.target = "_blank";
-      chip.rel = "noopener noreferrer";
-      chip.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "MARK_OPENED", url: other.url });
-      });
-
-      const icon = document.createElement("img");
-      icon.src = sourceIconUrl(other.source);
-      icon.alt = "";
-      icon.addEventListener("error", () => icon.remove());
-
-      const name = document.createElement("span");
-      name.textContent = other.source;
-
-      chip.append(icon, name);
-      if (other.paywall) chip.appendChild(paywallTag());
-      row.appendChild(chip);
-    }
-
-    return row;
-  }
-
-  // isLead controls size only. The "new" marker comes from the article's own
-  // freshness, so a slow topic's lead never claims to be new when it isn't.
-  function renderStory(article, isLead) {
-    const story = document.createElement("a");
-    story.className = isLead ? "story lead" : "story";
-    story.href = article.url;
-    story.target = "_blank";
-    story.rel = "noopener noreferrer";
-    story.title = article.title;
-
-    const headline = document.createElement("p");
-    headline.className = "story-title";
-    headline.textContent = article.title;
-
-    // Not every feed ships one — Hacker News, for instance, has nothing useful.
-    if (article.summary) {
-      const lead = document.createElement("p");
-      lead.className = "story-lead";
-      lead.textContent = article.summary;
-      story.appendChild(headline);
-      story.appendChild(lead);
-    }
-
-    const meta = document.createElement("p");
-    meta.className = "story-meta";
-
-    if (article.fresh) {
-      const fresh = document.createElement("span");
-      fresh.className = "fresh";
-      fresh.textContent = "new";
-      meta.append(fresh, separator());
-    }
-
-    story.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
-    });
-
-    const mark = document.createElement("img");
-    mark.className = "story-favicon";
-    mark.src = sourceIconUrl(article.source);
-    mark.alt = "";
-    // A missing logo shouldn't leave a broken-image gap in the row.
-    mark.addEventListener("error", () => mark.remove());
-
-    const source = document.createElement("span");
-    source.textContent = article.source;
-
-    const wall = article.paywall ? paywallTag() : null;
-
-    const time = document.createElement("span");
-    time.textContent = timeAgo(article.publishedAt);
-
-    meta.append(mark, source);
-    if (wall) meta.appendChild(wall);
-    meta.append(separator(), time);
-    if (!article.summary) story.appendChild(headline);
-    story.appendChild(meta);
-
-    const others = (article.coverage || []).filter((c) => c.source !== article.source);
-    if (!others.length) return story;
-
-    // Anchors can't nest, so the other outlets sit beside the story card.
-    const wrap = document.createElement("div");
-    wrap.className = "story-wrap";
-    wrap.appendChild(story);
-    wrap.appendChild(coverageRow(others));
-    return wrap;
   }
 
   function renderStories() {
@@ -903,7 +819,7 @@
     }
 
     articles.forEach((article, index) => {
-      panelBody.appendChild(renderStory(article, index === 0));
+      panelBody.appendChild(renderStory(article, { lead: index === 0 }));
     });
 
     // You looked at this tab, so these have had their turn.

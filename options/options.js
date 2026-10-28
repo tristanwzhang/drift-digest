@@ -2,6 +2,7 @@ const topicGrid = document.getElementById("topicGrid");
 const savedHint = document.getElementById("savedHint");
 const modeCards = Array.from(document.querySelectorAll(".mode-card"));
 const dailyToggle = document.getElementById("dailyToggle");
+const imagesToggle = document.getElementById("imagesToggle");
 const startHour = document.getElementById("startHour");
 const upgradeRow = document.getElementById("upgradeRow");
 const upgradeTitle = document.getElementById("upgradeTitle");
@@ -154,12 +155,14 @@ function persist() {
       display_mode: displayMode,
       daily_open: dailyToggle.checked,
       day_starts_at: Number(startHour.value),
+      show_images: imagesToggle.checked,
     },
     showSavedHint
   );
 }
 
 dailyToggle.addEventListener("change", persist);
+imagesToggle.addEventListener("change", persist);
 startHour.addEventListener("change", persist);
 
 function renderModes() {
@@ -257,8 +260,10 @@ chrome.storage.sync.get(
     display_mode: DEFAULT_DISPLAY_MODE,
     daily_open: true,
     day_starts_at: DAY_STARTS_AT_HOUR,
+    show_images: DEFAULT_SHOW_IMAGES,
   },
   (data) => {
+    imagesToggle.checked = data.show_images;
     selectedTopics = new Set(data.selected_topics);
     displayMode = data.display_mode;
     dailyToggle.checked = data.daily_open;

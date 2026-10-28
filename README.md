@@ -78,7 +78,10 @@ the scariest prompt it has, for a product that just reads RSS. Moving every host
 to `optional_host_permissions` removed it entirely.
 
 There's no account, no server, and no analytics. Publisher logos are bundled in
-the extension, so opening the digest makes zero network requests. Reading
+the extension; story photos load from the publisher that ran the story, with no
+referrer, and can be switched off. They are never loaded in the floating bubble:
+it lives inside other people's pages, and a page can list every image loaded
+into it — a photo there would tell each site you visit what you read. Reading
 history never leaves the device. [Full policy](store/PRIVACY.md).
 
 ## A constraint worth knowing about

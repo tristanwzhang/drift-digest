@@ -11,6 +11,7 @@ let articlesByTopic = {};
 let activeTopicId = null;
 let history = { opened: {}, seen: {} };
 let unprompted = false;   // true when Drift opened this itself
+let showImages = DEFAULT_SHOW_IMAGES;
 
 function openOptions() {
   chrome.runtime.openOptionsPage();
@@ -38,12 +39,6 @@ function showNotice(text, actionLabel) {
   body.appendChild(notice);
 }
 
-function separator() {
-  const dot = document.createElement("span");
-  dot.className = "sep";
-  return dot;
-}
-
 // Identity of a topic's stories, so we can tell a real update from a no-op.
 function topicSignature(articles) {
   return (articles || []).map((article) => article.url).join("|");
@@ -52,121 +47,6 @@ function topicSignature(articles) {
 function sameArticles(a, b) {
   const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
   return [...keys].every((key) => topicSignature(a[key]) === topicSignature(b[key]));
-}
-
-// Knowing before you click beats discovering after.
-function paywallTag() {
-  const tag = document.createElement("span");
-  tag.className = "paywall-tag";
-  tag.textContent = "paywall";
-  tag.title = "This source may ask you to subscribe";
-  return tag;
-}
-
-// One story, several outlets: pick who you'd rather read it from.
-function coverageRow(others) {
-  const row = document.createElement("div");
-  row.className = "story-sources";
-
-  const label = document.createElement("span");
-  label.className = "sources-label";
-  label.textContent = "also in";
-  row.appendChild(label);
-
-  for (const other of others) {
-    const chip = document.createElement("a");
-    chip.className = "source-chip";
-    chip.href = other.url;
-    chip.target = "_blank";
-    chip.rel = "noopener noreferrer";
-    chip.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "MARK_OPENED", url: other.url });
-    });
-
-    const icon = document.createElement("img");
-    icon.src = sourceIconUrl(other.source);
-    icon.alt = "";
-    icon.addEventListener("error", () => icon.remove());
-
-    const name = document.createElement("span");
-    name.textContent = other.source;
-
-    chip.append(icon, name);
-    if (other.paywall) chip.appendChild(paywallTag());
-    row.appendChild(chip);
-  }
-
-  return row;
-}
-
-// isLead controls size only. The "new" marker comes from the article's own
-// freshness, so a slow topic's lead never claims to be new when it isn't.
-function renderStory(article, isLead) {
-  const story = document.createElement("a");
-  story.className = isLead ? "story lead" : "story";
-  story.href = article.url;
-  story.target = "_blank";
-  story.rel = "noopener noreferrer";
-  story.title = article.title;
-
-  const headline = document.createElement("p");
-  headline.className = "story-title";
-  headline.textContent = article.title;
-
-  // Not every feed ships one — Hacker News, for instance, has nothing useful.
-  if (article.summary) {
-    const lead = document.createElement("p");
-    lead.className = "story-lead";
-    lead.textContent = article.summary;
-    story.appendChild(headline);
-    story.appendChild(lead);
-  }
-
-  const meta = document.createElement("p");
-  meta.className = "story-meta";
-
-  if (article.fresh) {
-    const fresh = document.createElement("span");
-    fresh.className = "fresh";
-    fresh.textContent = "new";
-    meta.append(fresh, separator());
-  }
-
-  story.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "MARK_OPENED", url: article.url });
-  });
-
-  const mark = document.createElement("img");
-  mark.className = "story-favicon";
-  mark.src = sourceIconUrl(article.source);
-  mark.alt = "";
-  // A missing logo shouldn't leave a broken-image gap in the row.
-  mark.addEventListener("error", () => mark.remove());
-
-  const source = document.createElement("span");
-  source.textContent = article.source;
-
-  const wall = article.paywall ? paywallTag() : null;
-
-  const time = document.createElement("span");
-  time.textContent = timeAgo(article.publishedAt);
-
-  meta.append(mark, source);
-  if (wall) meta.appendChild(wall);
-  meta.append(separator(), time);
-  if (!article.summary) story.appendChild(headline);
-  story.appendChild(meta);
-
-  const others = (article.coverage || []).filter((c) => c.source !== article.source);
-  if (!others.length) return story;
-
-  // Anchors can't nest, so the other outlets sit beside the story card
-  // rather than inside its click target.
-  const wrap = document.createElement("div");
-  wrap.className = "story-wrap";
-  wrap.appendChild(story);
-  wrap.appendChild(coverageRow(others));
-  return wrap;
 }
 
 function renderStories() {
@@ -194,7 +74,7 @@ function renderStories() {
   }
 
   articles.forEach((article, index) => {
-    body.appendChild(renderStory(article, index === 0));
+    body.appendChild(renderStory(article, { lead: index === 0, images: showImages }));
   });
 
   if (held.length) {
@@ -357,8 +237,13 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
 }
 
 chrome.storage.sync.get(
-  { selected_topics: DEFAULT_TOPIC_IDS, display_mode: DEFAULT_DISPLAY_MODE },
+  {
+    selected_topics: DEFAULT_TOPIC_IDS,
+    display_mode: DEFAULT_DISPLAY_MODE,
+    show_images: DEFAULT_SHOW_IMAGES,
+  },
   (synced) => {
+    showImages = synced.show_images;
     const bubbleMode = synced.display_mode === "bubble";
     resetPosBtn.hidden = !bubbleMode;
 

@@ -51,9 +51,10 @@ you drag anywhere, or tuck off the edge of the screen until you want it back.
 **Private by construction**
 
 No account, no servers, no analytics. Drift fetches public RSS feeds straight
-from the publishers you chose, and that's the only network request it makes.
-Publisher logos are bundled in the extension, so opening the digest doesn't
-even phone home for an image. Your reading history never leaves your device.
+from the publishers you chose, plus the photo each publisher attached to its
+story — and you can switch pictures off. Nothing ever goes to Drift's developer,
+because there's nowhere for it to go. Your reading history never leaves your
+device.
 
 Drift asks for access to a news site only when you pick a topic that uses it.
 Install it and it asks for nothing at all.

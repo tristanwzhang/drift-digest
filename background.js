@@ -42,6 +42,7 @@ const FEED_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
 const ALARM = "drift-refresh";
 const DAILY_KEY = "last_daily_open";
 const BUBBLE_SCRIPT_ID = "drift-bubble";
+const BUBBLE_FILES = ["shared/data.js", "shared/story.js", "shared/reorder.js", "content/content.js"];
 
 // ---------- what isn't news ----------
 //
@@ -71,7 +72,17 @@ const LOW_VALUE = new RegExp([
   "\\bhow to watch\\b", "\\bwhere to watch\\b", "\\bwatch live\\b",
   "\\b(review )?roundup\\b", "\\bweek in review\\b",
   "\\bodds, (start )?time\\b", "\\bprediction, odds\\b", "\\bpicks by\\b",
+  "\\bodds, predictions?\\b", "\\bby proven (model|computer)\\b",
+  "\\b(nba|nfl|mlb|nhl|ncaa|college football|college basketball) picks\\b",
+  // Archives and asides: a closed live blog, a clip, a quiz about the news.
+  "\\bas it happened\\b", "^watch:", "^quiz:", "\\((video|podcast|audio)\\)$",
+  "^news wrap:", "^who said it\\b", "\\bnews quiz\\b",
 ].join("|"), "i");
+
+// Two unrelated stories in one headline is a briefing, not a report: NPR's
+// "Democrats have a midterm edge, poll shows. And, Israelis vote" belongs to
+// neither story well. Case matters — "U.S. and Israeli" is one story.
+const BRIEFING = /[.?!]\s+And,\s/;
 
 // A headline a reader of an English digest can't read is not a headline for
 // them. Judged by which script the title is mostly in, never by the presence
@@ -99,10 +110,23 @@ const ENTITIES = {
   apos: "'",
   "#39": "'",
   nbsp: " ",
+  rsquo: "\u2019", lsquo: "\u2018", rdquo: "\u201d", ldquo: "\u201c",
+  mdash: "\u2014", ndash: "\u2013", hellip: "\u2026",
 };
 
+// Feeds that double-encode ("Mbapp&amp;eacute;") leave a named accent behind
+// once &amp; is undone. Accents come in a regular family, so the family is
+// decoded rather than listed one by one.
+const ACCENTS = { acute: "\u0301", grave: "\u0300", circ: "\u0302", tilde: "\u0303", uml: "\u0308", cedil: "\u0327" };
+
 function decodeEntities(text) {
+  return decodeOnce(decodeOnce(text));
+}
+
+function decodeOnce(text) {
   return text
+    .replace(/&([a-z])(acute|grave|circ|tilde|uml|cedil);/gi,
+      (_, letter, accent) => (letter + ACCENTS[accent.toLowerCase()]).normalize("NFC"))
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/&([a-z#0-9]+);/gi, (match, name) => ENTITIES[name.toLowerCase()] ?? match);
@@ -161,6 +185,73 @@ function pickSummary(block, title) {
   return (lastSpace > SUMMARY_MAX * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:—-]+$/, "") + "…";
 }
 
+// The picture the outlet chose for its own story. Feeds offer it several ways
+// and often several sizes, so take the largest declared one; fall back to the
+// first picture in the body. Inline images in a body include tracking pixels
+// (NerdWallet ships one on every item), which must never be loaded — a
+// picture is only taken from the body when nothing about it says pixel.
+const IMAGE_TAGS = /<(media:content|media:thumbnail|enclosure)\b[^>]*>/gi;
+const NOT_A_PICTURE = /\.gif(\?|$)|pixel|tracking|beacon|feedburner|doubleclick|\b1x1\b|gravatar/i;
+
+function attr(tag, name) {
+  const match = tag.match(new RegExp("\\b" + name + "\\s*=\\s*([\"'])([\\s\\S]*?)\\1", "i"));
+  return match ? decodeEntities(match[2].trim()) : "";
+}
+
+function pickImage(block) {
+  let best = "";
+  let bestWidth = -1;
+  for (const [tag] of block.matchAll(IMAGE_TAGS)) {
+    const url = attr(tag, "url");
+    if (!/^https:\/\//i.test(url) || NOT_A_PICTURE.test(url)) continue;
+    const type = attr(tag, "type");
+    const medium = attr(tag, "medium");
+    if (type && !/^image\//i.test(type)) continue;
+    if (medium && medium !== "image") continue;
+    const width = Number(attr(tag, "width")) || 0;
+    if (width > bestWidth) {
+      best = url;
+      bestWidth = width;
+    }
+  }
+
+  if (!best) {
+    const body = (pickTag(block, "content:encoded") || pickTag(block, "description"))
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+    const img = decodeEntities(body).match(/<img\b[^>]*>/i);
+    const url = img ? attr(img[0], "src") : "";
+    const width = img ? attr(img[0], "width") : "";
+    // A declared width under 100 is an icon or a pixel, not a photograph.
+    const tiny = width !== "" && Number(width) < 100;
+    if (/^https:\/\//i.test(url) && !NOT_A_PICTURE.test(url) && !tiny) best = url;
+  }
+
+  return sized(best);
+}
+
+// Several outlets link the camera original — Semafor's are 2MB, CBS's 2.3MB,
+// Politico's 8.5MB — for a picture shown 360px wide. Where the outlet's own
+// image service takes a width, ask it for one; each rewrite here was checked
+// to return a real, smaller image. Politico's has no such option, and eight
+// megabytes for a thumbnail is not a cost to put on a reader, so it goes
+// without.
+const IMAGE_WIDTH = 800;
+const RESIZERS = [
+  [/^(https:\/\/ichef\.bbci\.co\.uk\/ace\/standard\/)\d+\//, `$1${IMAGE_WIDTH}/`],
+  [/^(https:\/\/npr\.brightspotcdn\.com\/.*\/resize\/)[^/]+\//, `$1${IMAGE_WIDTH}/`],
+  [/^(https:\/\/(img\.semafor\.com|sportshub\.cbsistatic\.com)\/[^?]+)$/, `$1?w=${IMAGE_WIDTH}&width=${IMAGE_WIDTH}`],
+  [/^(https:\/\/images\.(wsj|mktw)\.net\/im-\d+)$/, `$1?width=${IMAGE_WIDTH}`],
+];
+const TOO_HEAVY = /^https:\/\/static\.politico\.com\//;
+
+function sized(url) {
+  if (!url || TOO_HEAVY.test(url)) return "";
+  for (const [pattern, replacement] of RESIZERS) {
+    if (pattern.test(url)) return url.replace(pattern, replacement);
+  }
+  return url;
+}
+
 function pickDate(block) {
   const raw =
     pickTag(block, "pubDate") ||
@@ -180,8 +271,9 @@ function parseFeed(xml, sourceName) {
       const title = clean(pickTag(block, "title"));
       return {
         title,
-        ...(LOW_VALUE.test(title) ? { lowValue: true } : {}),
+        ...(LOW_VALUE.test(title) || BRIEFING.test(title) ? { lowValue: true } : {}),
         summary: pickSummary(block, title),
+        image: pickImage(block) || undefined,
         url: pickLink(block),
         source: sourceName,
         // Where the outlet placed it. Editors lead with what they think
@@ -383,14 +475,18 @@ function cluster(items) {
     // Agreement counted by who agrees, not merely how many. Every outlet
     // beyond the strongest one carrying the story adds its own standing, so
     // two wire-copy blogs agreeing is worth less than two desks agreeing.
-    const standings = [...c.sources].map(standingOf).sort((a, b) => b - a);
+    // A quiz that names the same person, or a recap of the same game, is not
+    // a second desk deciding the story matters — it is the first desk's story
+    // being reused. Only reporting counts toward agreement.
+    const independent = new Set(reporting.map((member) => member.source));
+    const standings = [...independent].map(standingOf).sort((a, b) => b - a);
     const agreement = standings.slice(1).reduce((sum, value) => sum + value, 0);
 
     return {
       ...lead,
       summary,
       agreement: Number(agreement.toFixed(3)),
-      corroboration: c.sources.size,
+      corroboration: Math.max(1, independent.size),
       feedPosition: c.bestPosition,
       fresh: ageHours(lead.publishedAt) < FRESH_HOURS,
       topics: c.topics,
@@ -438,6 +534,29 @@ const PLACEMENT_STEP = 0.25;
 // What an outlet's standing is worth on its own.
 const AUTHORITY_GAIN = 4;
 
+// What a front page is made of, beyond agreement: the story only one desk has,
+// and the story where something large just changed. Both are read off the
+// headline, so both are kept narrow and checked by hand against a live day —
+// "the secret to slower aging" is a formula, not a scoop, and is left out.
+// They scale with the outlet's standing: an exclusive is a claim, and it is
+// worth what the newsroom making it is worth.
+const SCOOP = new RegExp([
+  "^(exclusive|scoop)\\b", "\\bexclusive:", "\\bin exclusive talks\\b",
+  "\\b(obtained by|documents show|records show|leaked)\\b",
+  "\\bsecret(ly)? (court|ruling|memo|deal|plan|talks|program|meeting|recording|files|documents|payments)\\b",
+  "\\bhiding a secret\\b",
+].join("|"), "i");
+const SCOOP_GAIN = 3;
+
+const STAKES = new RegExp([
+  "\\b(historic|unprecedented|first[- ]ever|landslide|trillion)\\b",
+  "\\brecord (high|low|seats|revenue|number|amounts?|heat|turnout)\\b", "\\ba likely record\\b",
+  "\\b(collapses?|collapsed|crash(es|ed)?|plunges?|plunged|soars?|soared|surges?|surged)\\b",
+  "\\b(stuns?|stunned|stunning|upset)\\b", "\\bshock (win|defeat|loss|reelection|result|recall)\\b",
+  "\\b(resigns?|resigned|ousted|indicted|indictment|arrested|topples?|toppled|fled|flees)\\b",
+].join("|"), "i");
+const STAKES_GAIN = 1.5;
+
 // How much a story matters, from signals we can actually observe. Recency used
 // to decide this on its own, which is why a wallpaper roundup could outrank
 // real news simply by being newer.
@@ -476,13 +595,248 @@ function importance(item) {
   // show one rather than nothing.
   const derivative = item.lowValue ? LOW_VALUE_DRAG : 0;
 
-  return agreement + authority + breadth + placement + freshness - staleness - derivative;
+  const scoop = SCOOP.test(item.title) ? SCOOP_GAIN * standing : 0;
+  const stakes = STAKES.test(item.title) ? STAKES_GAIN * standing : 0;
+
+  return agreement + authority + breadth + placement + freshness + scoop + stakes
+    - staleness - derivative;
+}
+
+function byScore(a, b) {
+  return b.score - a.score || new Date(b.publishedAt) - new Date(a.publishedAt);
 }
 
 function rank(items) {
-  return cluster(items)
-    .map((item) => ({ ...item, score: Number(importance(item).toFixed(3)) }))
-    .sort((a, b) => b.score - a.score || new Date(b.publishedAt) - new Date(a.publishedAt));
+  const stories = cluster(items)
+    .map((item) => ({ ...item, score: importance(item) }))
+    .sort(byScore);
+  return withEvents(stories)
+    .map((item) => ({ ...item, score: Number(item.score.toFixed(3)) }))
+    .sort(byScore);
+}
+
+// ---------- events ----------
+//
+// Clustering above finds the same *article* told twice: two outlets writing
+// "No clear winner in Israel's election". It cannot see that "Rivals in Israel
+// Election Strike Tone of Triumph", "Israeli turnout hits three-decade high"
+// and "What to Expect Now That Polls Are Closed in Israel" are one *event*.
+// Measured on a day of live feeds, the three biggest stories in the world —
+// Anthropic's IPO (20 headlines, 12 outlets), Lula's upset in Brazil (21, 10)
+// and Israel's election (18, 7) — each reached the ranking as a scatter of
+// single-outlet stories. So the day's front page looked like nobody had
+// noticed it, while World spent all three of its slots on Israel.
+//
+// An event is the set of stories that share at least two names-or-rare-words
+// with its strongest story. Star-shaped on purpose: joining to the seed alone,
+// never to whatever joined last, stops one combined briefing ("Democrats have
+// a midterm edge. And, Israelis vote") from chaining two events into one.
+
+// Names that are made of common words; kept whole so "Trump administration"
+// is one name, not a name plus a word every second political story shares.
+const EVENT_PHRASES = [
+  "trump administration", "biden administration", "white house", "wall street",
+  "supreme court", "prime minister", "new york", "world cup", "world series",
+  "united states", "united nations", "european union", "federal reserve",
+  "silicon valley", "middle east", "stock market", "interest rates",
+  "climate change", "champions league", "premier league", "super bowl",
+  "big tech", "hong kong", "los angeles", "san francisco", "north korea",
+  "south korea", "south africa", "saudi arabia", "artificial intelligence",
+];
+const EVENT_PHRASE_RE = new RegExp("\\b(" + EVENT_PHRASES.join("|") + ")\\b", "g");
+
+// Capitalised, and so mistaken for names, but they name nothing in particular.
+const EVENT_GENERIC = new Set(["ipo", "ceo", "cfo", "cto", "gdp", "etf", "nyse", "live", "watch", "opinio", "analys", "game", "review"]);
+const EVENT_STOP = new Set([
+  "the", "and", "for", "with", "from", "that", "this", "into", "over", "after",
+  "about", "amid", "says", "said", "will", "what", "when", "where", "which",
+  "their", "they", "have", "more", "than", "just", "your", "you", "how", "why",
+  "who", "new", "year", "years", "day", "days", "week", "today", "first",
+  "last", "could", "would", "should", "been", "were", "was", "are", "has",
+  "had", "its", "not", "but", "all", "out", "off", "one", "two", "three",
+  "can", "may", "now", "get", "got", "make", "makes", "back", "also", "here",
+  "there", "news", "update", "video", "report", "she",
+  "his", "her", "him", "our", "big", "top", "still", "next", "month", "again",
+  "agains", "betwee", "under", "while", "being", "other", "strong", "major",
+  "former", "leader", "presid", "govern", "offici", "deal", "plan", "plans",
+  "call", "calls", "face", "faces", "take", "takes", "help", "set", "need",
+  "want", "show", "shows", "know", "look", "high", "long", "time", "way",
+  "people", "world", "countr", "state", "states", "nation", "public", "politi",
+  "party", "partie", "vote", "voters", "win", "wins", "lose", "loses", "says",
+  "warn", "warns", "push", "pushes", "move", "moves", "amid", "despit",
+]);
+const EVENT_CALENDAR = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|januar|februa|august|septem|octobe|novemb|decemb|monday|tuesda|wednes|thursd|friday|saturd|sunday|\d+)$/;
+
+// Six letters is enough to make "Israel" and "Israeli", "Brazil" and
+// "Brazilian", "election" and "elections" the same word, which is most of
+// what matters when one desk writes about a country and another about its
+// voters.
+function eventStem(word) {
+  return word
+    .toLowerCase()
+    .replace(/['’]s$/, "")
+    .normalize("NFD")
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 6);
+}
+
+function eventTokens(title) {
+  const merged = title.toLowerCase().replace(EVENT_PHRASE_RE, (phrase) => phrase.replace(/\s+/g, ""));
+  const tokens = merged
+    .split(/[\s\-–—:,;|]+/)
+    .map(eventStem)
+    .filter((stem) => stem.length >= 3 && !EVENT_STOP.has(stem) && !EVENT_CALENDAR.test(stem));
+  return [...new Set(tokens)];
+}
+
+const PHRASE_STEMS = new Set(EVENT_PHRASES.map((phrase) => eventStem(phrase.replace(/\s+/g, ""))));
+
+// Which words are names, learned from the batch itself: a word written with a
+// capital in the middle of a sentence-case headline is a name. Headlines in
+// Title Case say nothing either way, so they are left out of the count.
+function namesIn(titles) {
+  const capital = new Map();
+  const lower = new Map();
+  for (const title of titles) {
+    const words = title.split(/\s+/);
+    const long = words.filter((word) => /^[A-Za-z]/.test(word) && word.length > 3);
+    const capitals = long.filter((word) => /^[A-Z]/.test(word)).length;
+    if (capitals / Math.max(1, long.length) > 0.7) continue;     // Title Case
+    words.forEach((word, index) => {
+      if (index === 0) return;                                  // sentence start
+      const stem = eventStem(word);
+      if (stem.length < 3) return;
+      const tally = /^[^A-Za-z]*[A-Z]/.test(word) ? capital : lower;
+      tally.set(stem, (tally.get(stem) || 0) + 1);
+    });
+  }
+  const names = new Set(PHRASE_STEMS);
+  capital.forEach((count, stem) => {
+    if (count > (lower.get(stem) || 0) && !EVENT_GENERIC.has(stem)) names.add(stem);
+  });
+  return names;
+}
+
+// Measured in units of a word seen once in the batch, as for stories, so the
+// bar holds whether you follow three topics or fifteen.
+const EVENT_RARITY = 0.98;
+const EVENT_WINDOW_H = 48;
+// Rarity alone can't separate an event from a beat. "Democrats" and
+// "Republicans" are each uncommon enough, and share a headline most days; so
+// do "OpenAI" and "GPT". What sets an event apart is either a genuinely rare
+// word in common ("Bolsonaro", "Fleetwood", "Comey") or a pairing that keeps
+// recurring today: measured live, Israel+election shared 29 headlines and
+// Anthropic+IPO 24, while Democrats+Republicans shared 4. A word is rare here
+// if it's in fewer than the cube root of the batch; a pairing is surging at 6.
+const EVENT_SURGE = 6;
+// How much it matters that many outlets are on one event: nothing for two,
+// then a little more for every doubling. Logarithmic because the twelfth
+// outlet covering an IPO says much less than the third did.
+const HEAT_GAIN = 3;
+const HEAT_FROM = 3;
+// Other angles shown beneath the lead of a big event.
+const RELATED_MAX = 2;
+
+function outletsOf(story) {
+  return story.coverage ? story.coverage.map((entry) => entry.source) : [story.source];
+}
+
+function withEvents(stories) {
+  const names = namesIn(stories.map((story) => story.title));
+  const tokens = stories.map((story) => eventTokens(story.title));
+  const docFreq = new Map();
+  tokens.forEach((list) => list.forEach((token) => docFreq.set(token, (docFreq.get(token) || 0) + 1)));
+  const total = Math.max(2, stories.length);
+  const rarity = (token) => Math.log(total / docFreq.get(token));
+  const bar = EVENT_RARITY * Math.log(total);
+  const distinctive = Math.cbrt(total);
+  const carriers = new Map();
+  tokens.forEach((list, index) => list.forEach((token) => {
+    if (!carriers.has(token)) carriers.set(token, []);
+    carriers.get(token).push(index);
+  }));
+  const together = (shared) => {
+    const [first, ...rest] = shared.map((token) => carriers.get(token)).sort((a, b) => a.length - b.length);
+    return first.filter((index) => rest.every((list) => list.includes(index))).length;
+  };
+
+  const eventOf = new Array(stories.length).fill(-1);
+  const events = [];
+
+  stories.forEach((seed, i) => {
+    if (eventOf[i] >= 0) return;
+    const id = events.length;
+    const core = new Set(tokens[i]);
+    const members = [i];
+    eventOf[i] = id;
+
+    for (let j = i + 1; j < stories.length; j += 1) {
+      if (eventOf[j] >= 0) continue;
+      const shared = tokens[j].filter((token) => core.has(token));
+      if (shared.length < 2 || !shared.some((token) => names.has(token))) continue;
+      // Either path is enough. A surging pairing is common by definition, so
+      // holding it to the rarity bar as well would reject exactly the biggest
+      // events — measured on a three-topic batch, Anthropic+IPO shared eleven
+      // headlines and still fell short of it.
+      const rare =
+        shared.some((token) => docFreq.get(token) <= distinctive) &&
+        shared.reduce((sum, token) => sum + rarity(token), 0) >= bar;
+      if (!rare && together(shared) < EVENT_SURGE) continue;
+      if (hoursApart(stories[j].publishedAt, seed.publishedAt) > EVENT_WINDOW_H) continue;
+      eventOf[j] = id;
+      members.push(j);
+    }
+    events.push(members);
+  });
+
+  const outlets = events.map((members) =>
+    new Set(members.flatMap((index) => outletsOf(stories[index]))).size);
+
+  return stories.map((story, index) => {
+    const id = eventOf[index];
+    const size = outlets[id];
+    const heat = size >= HEAT_FROM ? HEAT_GAIN * Math.log2(size / 2) : 0;
+
+    // Other angles on the same event, each from a different outlet than the
+    // lead and than each other — the point is breadth, not three takes from
+    // one newsroom.
+    const related = [];
+    if (size >= HEAT_FROM) {
+      const used = new Set(outletsOf(story));
+      for (const other of events[id]) {
+        if (related.length >= RELATED_MAX) break;
+        const candidate = stories[other];
+        if (other === index || candidate.lowValue || used.has(candidate.source)) continue;
+        used.add(candidate.source);
+        related.push({
+          title: candidate.title,
+          source: candidate.source,
+          url: candidate.url,
+          ...(candidate.paywall ? { paywall: true } : {}),
+        });
+      }
+    }
+
+    return {
+      ...story,
+      score: story.score + heat,
+      event: id,
+      eventOutlets: size,
+      ...(related.length ? { related } : {}),
+    };
+  });
+}
+
+// One story per event in any list a reader sees. The best-ranked story stands
+// for its event; the rest are reachable beneath it, not stacked beside it.
+function onePerEvent(stories) {
+  const seen = new Set();
+  return stories.filter((story) => {
+    if (story.event === undefined) return true;
+    if (seen.has(story.event)) return false;
+    seen.add(story.event);
+    return true;
+  });
 }
 
 // Where a topic sits on your dashboard is a statement about how much you care
@@ -537,8 +891,11 @@ function buildTrending(ranked, order = []) {
     .sort((a, b) => b.score - a.score)
     .map((entry) => entry.item);
 
-  const corroborated = weighted.filter((item) => item.corroboration > 1);
-  const rest = weighted.filter((item) => item.corroboration === 1);
+  // Several outlets on the same event counts, even when no two of them wrote
+  // the same headline — that is what most big news looks like.
+  const covered = (item) => Math.max(item.corroboration, item.eventOutlets || 0) > 1;
+  const corroborated = onePerEvent(weighted.filter(covered));
+  const rest = onePerEvent(weighted.filter((item) => !covered(item)));
 
   // One topic shouldn't be the whole of Trending even if it is your first:
   // the point of the tab is a look across everything you follow. Capping by
@@ -554,10 +911,11 @@ function buildTrending(ranked, order = []) {
   function fill(pool, limit) {
     for (const item of interleaveBySource(pool, shortlist)) {
       if (out.length >= limit) return;
-      if (seen.has(item.url)) continue;
+      if (seen.has(item.url) || seen.has("event:" + item.event)) continue;
       const topic = leadTopic(item, order);
       if ((perTopic.get(topic) || 0) >= cap) continue;
       seen.add(item.url);
+      seen.add("event:" + item.event);
       perTopic.set(topic, (perTopic.get(topic) || 0) + 1);
       out.push(item);
     }
@@ -761,6 +1119,37 @@ function assignToTopics(clusters, topicOrder) {
   return byTopic;
 }
 
+// An event belongs to one tab. Measured live, Bolsonaro's flight from Brazil
+// led World, Politics and Finance at once — three of nine slots on a single
+// event, for a reader who opens all three tabs. It lives where most of its
+// coverage was filed, your own topic order breaking ties; the other angles
+// still show beneath it.
+function homeEvents(grouped, order) {
+  const tally = new Map();
+  order.forEach((id) => {
+    for (const story of grouped[id] || []) {
+      if (!tally.has(story.event)) tally.set(story.event, new Map());
+      const counts = tally.get(story.event);
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+  });
+
+  const home = new Map();
+  tally.forEach((counts, event) => {
+    let best = null;
+    for (const id of order) {
+      if ((counts.get(id) || 0) > (counts.get(best) || 0)) best = id;
+    }
+    home.set(event, best);
+  });
+
+  const out = {};
+  order.forEach((id) => {
+    out[id] = (grouped[id] || []).filter((story) => home.get(story.event) === id);
+  });
+  return out;
+}
+
 async function topicStamps() {
   const { topic_fetched_at: stamps } = await chrome.storage.local.get({ topic_fetched_at: {} });
   return stamps;
@@ -850,7 +1239,7 @@ async function doRefresh(only, fromCache) {
 
   const order = topics.map((topic) => topic.id);
   const rankedAll = rank(fetched.flat());
-  const grouped = assignToTopics(rankedAll, order);
+  const grouped = homeEvents(assignToTopics(rankedAll, order), order);
 
   // Keep empty topics in the map — "quiet today" is a real answer, and
   // dropping the key would make the panel think the fetch failed.
@@ -862,7 +1251,7 @@ async function doRefresh(only, fromCache) {
   });
   articles[TRENDING_ID] = buildTrending(rankedAll, order);
   order.forEach((id) => {
-    articles[id] = interleaveBySource(grouped[id] || [], POOL_PER_TOPIC)
+    articles[id] = interleaveBySource(onePerEvent(grouped[id] || []), POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
       // them; it has done its job by now and shouldn't bloat the cache.
       .map(({ topics, ...article }) => article);
@@ -910,11 +1299,16 @@ async function syncBubbleScript() {
 
   const wanted = mode === "bubble" && allowed;
 
-  if (wanted && registered.length === 0) {
+  if (wanted && registered.length > 0 && registered[0].js?.join() !== BUBBLE_FILES.join()) {
+    // A registration outlives an update. One made by an older version names
+    // the files that version shipped, and the bubble would load without the
+    // ones added since.
+    await chrome.scripting.updateContentScripts([{ id: BUBBLE_SCRIPT_ID, js: BUBBLE_FILES }]);
+  } else if (wanted && registered.length === 0) {
     await chrome.scripting.registerContentScripts([{
       id: BUBBLE_SCRIPT_ID,
       matches: ["<all_urls>"],
-      js: ["shared/data.js", "shared/reorder.js", "content/content.js"],
+      js: BUBBLE_FILES,
       runAt: "document_idle",
       allFrames: false,
       persistAcrossSessions: true,

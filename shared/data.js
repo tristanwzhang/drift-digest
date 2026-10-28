@@ -370,6 +370,11 @@ const TRENDING_TOPIC = {
 
 const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 
+// Pictures are on unless you turn them off. Each one is a request to the
+// outlet's image server — the same outlet whose feed Drift already reads, but
+// a request all the same, so it's a setting rather than a given.
+const DEFAULT_SHOW_IMAGES = true;
+
 // "toolbar" keeps the page clean and lives in the Chrome toolbar;
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";
