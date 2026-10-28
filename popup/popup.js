@@ -39,6 +39,30 @@ function showNotice(text, actionLabel) {
   body.appendChild(notice);
 }
 
+// The shape of a digest while the first one is fetched, so the wait reads as
+// "nearly here" rather than as a blank page with a sentence in it.
+function showSkeleton() {
+  topicTabs.hidden = true;
+  body.textContent = "";
+  const sheet = document.createElement("div");
+  sheet.className = "skeleton";
+  sheet.setAttribute("aria-label", "Gathering headlines");
+  sheet.innerHTML =
+    '<div class="sk sk-cover"></div>' +
+    '<div class="sk sk-line"></div><div class="sk sk-line short"></div>' +
+    '<div class="sk-row"><div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div><div class="sk sk-thumb"></div></div>' +
+    '<div class="sk-row"><div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div><div class="sk sk-thumb"></div></div>';
+  body.appendChild(sheet);
+}
+
+// "Updated 4m ago" in the footer: the one fact about a digest you can't see
+// from the stories themselves.
+function showUpdated(fetchedAt) {
+  const stamp = document.getElementById("updatedAt");
+  if (!stamp) return;
+  stamp.textContent = fetchedAt ? "Updated " + timeAgo(new Date(fetchedAt).toISOString()) : "";
+}
+
 // Identity of a topic's stories, so we can tell a real update from a no-op.
 function topicSignature(articles) {
   return (articles || []).map((article) => article.url).join("|");
@@ -74,10 +98,13 @@ function renderStories() {
   }
 
   articles.forEach((article, index) => {
+    const trending = activeTopicId === TRENDING_ID;
     body.appendChild(renderStory(article, {
       lead: index === 0,
       images: showImages,
-      tags: activeTopicId === TRENDING_ID ? trendingTags(article) : [],
+      tags: trending ? trendingTags(article) : [],
+      rank: trending && index > 0 ? index + 1 : 0,
+      index,
     }));
   });
 
@@ -145,13 +172,12 @@ function renderTabs() {
     if (topicId === TRENDING_ID) tab.classList.add("is-pinned");
     tab.textContent = topic.short || topic.label;
 
-    tab.addEventListener("click", () => {
-      selectTopic(topicId);
-      tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-    });
+    tab.addEventListener("click", () => selectTopic(topicId));
 
     topicTabs.appendChild(tab);
   });
+
+  revealActiveTab(topicTabs);
 }
 
 // Drag a tab to rearrange your dashboard. Trending is pinned first.
@@ -218,7 +244,7 @@ function render(topicIds, savedTopicId, articles, readingHistory) {
   }
 
   if (Object.keys(articlesByTopic).length === 0) {
-    showNotice("Gathering headlines…");
+    showSkeleton();
     chrome.runtime.sendMessage({ type: "REFRESH" }, (reply) => {
       if (reply?.articles) render(topicIds, savedTopicId, reply.articles);
     });
@@ -258,6 +284,7 @@ chrome.storage.sync.get(
         bubble_docked: null,
         active_topic: null,
         articles: {},
+        fetched_at: 0,
         opened_urls: {},
         seen_urls: {},
         unprompted_open: 0,
@@ -267,6 +294,7 @@ chrome.storage.sync.get(
         unprompted = Date.now() - local.unprompted_open < 120000;
         if (unprompted) chrome.storage.local.remove("unprompted_open");
 
+        showUpdated(local.fetched_at);
         render(synced.selected_topics, local.active_topic, local.articles, {
           opened: local.opened_urls,
           seen: local.seen_urls,
@@ -289,7 +317,18 @@ resetPosBtn.addEventListener("click", () => {
 
 document.getElementById("settingsBtn").addEventListener("click", openOptions);
 
+document.getElementById("dateline").textContent = new Date().toLocaleDateString([], {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
 // A popup closes when you click the page behind it, but that means clicking
 // into whatever you were reading. This is the way out that doesn't disturb it.
 document.getElementById("closeBtn").addEventListener("click", () => window.close());
 document.getElementById("manageBtn").addEventListener("click", openOptions);
+
+// A background refresh landing while the popup is open moves the stamp too.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.fetched_at) showUpdated(changes.fetched_at.newValue);
+});

@@ -96,7 +96,8 @@ function relatedRow(related) {
 
 // A picture that fails — a moved file, a blocked host — takes its frame with
 // it, so the card falls back to the plain layout rather than an empty box.
-function storyPicture(url, story) {
+// onFail lets the cover layout take back the headline it had set on the photo.
+function storyPicture(url, story, onFail) {
   const frame = document.createElement("div");
   frame.className = "story-image";
 
@@ -106,8 +107,9 @@ function storyPicture(url, story) {
   // Publishers learn nothing from a referrer about where the reader came from.
   img.referrerPolicy = "no-referrer";
   img.addEventListener("error", () => {
+    if (onFail) onFail();
     frame.remove();
-    story.classList.remove("has-image");
+    story.classList.remove("has-image", "is-cover");
   });
   img.addEventListener("load", () => frame.classList.add("is-loaded"));
   img.src = url;
@@ -149,19 +151,18 @@ function storyKicker(tags, outlets) {
 
 // tags: topic names to show above the headline — given on Trending only,
 // where they say something; inside a topic's own tab they'd only repeat it.
-function renderStory(article, { lead = false, images = false, tags = [] } = {}) {
+// rank: Trending's running order, shown as a numeral the way a "most read"
+// list does. The lead goes unnumbered; it's already the cover.
+// index: position in the list, which staggers the cards in as they arrive.
+function renderStory(article, { lead = false, images = false, tags = [], rank = 0, index = 0 } = {}) {
   const story = document.createElement("a");
   story.className = lead ? "story lead" : "story";
   story.href = article.url;
   story.target = "_blank";
   story.rel = "noopener noreferrer";
   story.title = article.title;
+  story.style.setProperty("--i", String(index));
   markOpenedOnClick(story, article.url);
-
-  if (images && article.image) {
-    story.classList.add("has-image");
-    story.appendChild(storyPicture(article.image, story));
-  }
 
   const text = document.createElement("div");
   text.className = "story-text";
@@ -170,12 +171,41 @@ function renderStory(article, { lead = false, images = false, tags = [] } = {}) 
   // belongs to (on Trending, where sections mix) and how big the story is.
   // The meta row is already full on a narrow card.
   const kicker = storyKicker(tags, article.eventOutlets || 0);
-  if (kicker) text.appendChild(kicker);
 
   const headline = document.createElement("p");
   headline.className = "story-title";
   headline.textContent = article.title;
-  text.appendChild(headline);
+
+  // The lead with a picture is a cover: the headline set on the photo, as
+  // Apple News and a magazine front do. Everything else reads beside a
+  // thumbnail, the way a newspaper's inside pages do.
+  const cover = lead && images && article.image;
+  if (cover) {
+    story.classList.add("has-image", "is-cover");
+    const overlay = document.createElement("div");
+    overlay.className = "cover-text";
+    if (kicker) overlay.appendChild(kicker);
+    overlay.appendChild(headline);
+    const frame = storyPicture(article.image, story, () => text.prepend(...overlay.childNodes));
+    frame.appendChild(overlay);
+    story.appendChild(frame);
+  } else {
+    if (images && article.image) {
+      story.classList.add("has-image");
+      story.appendChild(storyPicture(article.image, story));
+    }
+    if (kicker) text.appendChild(kicker);
+    text.appendChild(headline);
+  }
+
+  if (rank) {
+    const numeral = document.createElement("span");
+    numeral.className = "story-rank";
+    numeral.textContent = String(rank);
+    numeral.setAttribute("aria-hidden", "true");
+    story.classList.add("is-ranked");
+    story.prepend(numeral);
+  }
 
   // Not every feed ships one — Hacker News, for instance, has nothing useful.
   if (article.summary) {
@@ -217,6 +247,7 @@ function renderStory(article, { lead = false, images = false, tags = [] } = {}) 
   // inside its click target.
   const wrap = document.createElement("div");
   wrap.className = "story-wrap";
+  wrap.style.setProperty("--i", String(index));
   wrap.appendChild(story);
   if (angles.length) wrap.appendChild(relatedRow(angles));
   if (others.length) wrap.appendChild(coverageRow(others));

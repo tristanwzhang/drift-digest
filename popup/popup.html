@@ -7,10 +7,17 @@
 </head>
 <body>
   <header class="popup-header">
-    <div class="brand"><span class="brand-rule"></span>Drift</div>
+    <div class="masthead">
+      <div class="brand"><span class="brand-rule"></span>Drift</div>
+      <p class="dateline" id="dateline"></p>
+    </div>
     <div class="header-actions">
-      <button class="icon-btn" id="settingsBtn" title="Manage topics">&#9881;</button>
-      <button class="icon-btn" id="closeBtn" title="Close" aria-label="Close">&#10005;</button>
+      <button class="icon-btn" id="settingsBtn" title="Manage topics" aria-label="Manage topics">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>
+      </button>
+      <button class="icon-btn" id="closeBtn" title="Close" aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
     </div>
   </header>
 
@@ -26,8 +33,11 @@
   <main class="popup-body" id="body" role="tabpanel"></main>
 
   <footer class="popup-footer">
-    <button class="footer-link" id="manageBtn">Manage topics</button>
-    <button class="footer-link" id="resetPosBtn" hidden>Reset bubble position</button>
+    <span class="updated-at" id="updatedAt"></span>
+    <span class="footer-links">
+      <button class="footer-link" id="resetPosBtn" hidden>Reset bubble</button>
+      <button class="footer-link" id="manageBtn">Topics</button>
+    </span>
   </footer>
 
   <script src="../shared/data.js"></script>

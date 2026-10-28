@@ -387,3 +387,81 @@ body {
   font-size: 14px;
   line-height: 1.4;
 }
+
+/* ---------- Front-page polish, matching the popup ---------- */
+.masthead h1 { font-size: 40px; font-weight: 500; letter-spacing: -0.022em; line-height: 1.12; }
+
+.story { transition: background 0.15s ease, transform 0.12s ease; }
+.story:active { transform: scale(0.995); }
+.topic > :is(.story, .story-wrap) + :is(.story, .story-wrap) { position: relative; }
+.topic > :is(.story, .story-wrap) + :is(.story, .story-wrap)::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: var(--hairline);
+}
+/* A story card bleeds 16px each side for its hover fill; a wrap doesn't. */
+.topic > :is(.story, .story-wrap) + .story-wrap::after { left: 0; right: 0; }
+
+.story-title { font-weight: 500; letter-spacing: -0.006em; text-wrap: pretty; }
+.story.lead .story-title { font-size: 24px; line-height: 1.24; letter-spacing: -0.015em; text-wrap: balance; }
+.story-meta { font-family: var(--sans); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.story-meta .story-favicon + span { color: var(--text); font-weight: 600; opacity: 0.85; }
+.story-kicker { font-family: var(--sans); font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; }
+.sources-label, .paywall-tag { font-family: var(--sans); font-weight: 600; }
+
+/* The cover: the lead's headline set on its photo. The scrim stays dark in
+   both themes, because the photo underneath doesn't change with them. */
+.story.is-cover .story-image {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  margin: 2px 0 14px;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -24px rgba(53,40,20,0.5);
+}
+.story.is-cover .story-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(14,12,9,0) 35%, rgba(14,12,9,0.3) 58%, rgba(14,12,9,0.85) 100%);
+  pointer-events: none;
+}
+.cover-text { position: absolute; left: 22px; right: 22px; bottom: 20px; z-index: 1; }
+.cover-text .story-title {
+  color: #FBF8F2;
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.16;
+  text-shadow: 0 1px 14px rgba(0,0,0,0.35);
+}
+.cover-text .story-kicker { color: #E7C98F; margin-bottom: 8px; }
+.cover-text .kicker-topic ~ .kicker-reach { color: rgba(251,248,242,0.75); }
+
+.story-image img { transition: opacity 0.2s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.story:hover .story-image img { transform: scale(1.03); }
+
+/* Trending's running order, numbered like a "most read" list. */
+.story.is-ranked { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 14px; }
+.story.is-ranked.has-image { grid-template-columns: 30px minmax(0, 1fr) 96px; column-gap: 16px; }
+.story.is-ranked .story-rank { grid-column: 1; grid-row: 1; }
+.story.is-ranked .story-text { grid-column: 2; grid-row: 1; }
+.story.is-ranked.has-image .story-image { grid-column: 3; grid-row: 1; }
+.story-rank {
+  font-family: var(--serif);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.topic > * { animation: cardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(min(var(--i, 0), 6) * 40ms); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .topic > * { animation: none; }
+  .story, .story-image img { transition: none; }
+  .story:hover .story-image img { transform: none; }
+}

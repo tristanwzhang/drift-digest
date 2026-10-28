@@ -198,6 +198,28 @@ browser activity on a new calendar date, watched from startup, window focus,
 tab activation and the alarm. It tries `chrome.action.openPopup()` and falls
 back to opening `daily/daily.html` in a tab.
 
+## Look
+
+The popup borrows from front pages rather than from apps:
+
+- the lead story is a **cover** — its headline set on the photo over a dark
+  scrim (Apple News, a magazine front). The scrim stays dark in both themes,
+  because a photograph doesn't follow the reader's colour scheme. If the
+  photo fails, the headline moves back into the text column
+- the rest read beside a **thumbnail**, divided by hairline rules inset to the
+  text column, as a newspaper rules between items instead of boxing them
+- Trending is **numbered** from 2 down, like a "most read" list
+- kickers and meta are set in the sans, not the monospace: they're labels a
+  reader scans, not data
+- cards settle in one after another (35ms apart, capped at six), with
+  `animation-fill-mode: backwards` so a finished entrance doesn't pin
+  `transform` and swallow the press feedback; all of it off under
+  `prefers-reduced-motion`
+- a skeleton in the shape of a digest replaces "Gathering headlines…"
+- the footer says when the digest was last updated
+
+The bubble gets the same treatment minus pictures (see shared/story.js).
+
 ## Parsing
 
 MV3 service workers have no DOM, so there's no `DOMParser`. `background.js`

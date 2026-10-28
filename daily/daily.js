@@ -36,10 +36,13 @@ function renderTopic(topic, pool) {
     section.appendChild(quiet);
   } else {
     articles.forEach((article, index) => {
+      const trending = topic.id === TRENDING_ID;
       section.appendChild(renderStory(article, {
         lead: index === 0,
         images: showImages,
-        tags: topic.id === TRENDING_ID ? trendingTags(article) : [],
+        tags: trending ? trendingTags(article) : [],
+        rank: trending && index > 0 ? index + 1 : 0,
+        index,
       }));
     });
   }

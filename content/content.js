@@ -517,6 +517,43 @@
       transition: color 0.16s ease;
     }
     .footer-link:hover { color: var(--accent); }
+
+    /* ---------- Front-page polish, matching the popup ---------- */
+    .icon-btn { width: 30px; height: 30px; border-radius: 9px; transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease; }
+    .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+    .icon-btn:active { transform: scale(0.92); }
+
+    .panel-body { animation: none; padding-top: 4px; }
+    .story { padding: 14px 18px 15px; transition: background 0.15s ease, transform 0.12s ease; }
+    .story:active { transform: scale(0.992); }
+    .panel-body > * + * { position: relative; }
+    .panel-body > * + *::after {
+      content: ""; position: absolute; top: 0; left: 18px; right: 18px; height: 1px; background: var(--hairline);
+    }
+    .story-title { font-weight: 500; font-size: 15px; line-height: 1.38; letter-spacing: -0.005em; text-wrap: pretty; }
+    .story.lead .story-title { font-size: 19px; line-height: 1.28; letter-spacing: -0.012em; text-wrap: balance; }
+    .story-meta { font-family: var(--sans); font-size: 11px; font-weight: 500; gap: 7px; font-variant-numeric: tabular-nums; }
+    .story-meta .story-favicon + span { color: var(--text); font-weight: 600; opacity: 0.85; }
+    .story-kicker { font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 5px; }
+    .sources-label, .paywall-tag { font-family: var(--sans); font-weight: 600; }
+
+    .story.is-ranked { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 10px; }
+    .story.is-ranked .story-rank { grid-column: 1; grid-row: 1; }
+    .story.is-ranked .story-text { grid-column: 2; grid-row: 1; }
+    .story-rank {
+      font-family: var(--serif); font-size: 24px; font-weight: 500; line-height: 1;
+      color: var(--accent); font-variant-numeric: lining-nums tabular-nums; padding-top: 1px;
+    }
+
+    .panel-body > * {
+      animation: cardIn 0.36s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+      animation-delay: calc(min(var(--i, 0), 6) * 35ms);
+    }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      .panel-body > * { animation: none; }
+      .story { transition: none; }
+    }
   `;
 
   // ---------- shadow root ----------
@@ -553,8 +590,12 @@
       <div class="brand"><span class="brand-rule"></span>Drift</div>
       <div class="header-right">
         <span class="clock"></span>
-        <button class="icon-btn" data-action="settings" title="Manage topics">&#9881;</button>
-        <button class="icon-btn" data-action="close" title="Close">&#10005;</button>
+        <button class="icon-btn" data-action="settings" title="Manage topics" aria-label="Manage topics">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>
+        </button>
+        <button class="icon-btn" data-action="close" title="Close" aria-label="Close">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
       </div>
     </div>
     <div class="topic-tabs" role="tablist" aria-label="Your topics"></div>
@@ -820,9 +861,12 @@
     }
 
     articles.forEach((article, index) => {
+      const trending = activeTopicId === TRENDING_ID;
       panelBody.appendChild(renderStory(article, {
         lead: index === 0,
-        tags: activeTopicId === TRENDING_ID ? trendingTags(article) : [],
+        tags: trending ? trendingTags(article) : [],
+        rank: trending && index > 0 ? index + 1 : 0,
+        index,
       }));
     });
 
@@ -883,13 +927,12 @@
         tab.appendChild(dot);
       }
 
-      tab.addEventListener("click", () => {
-        selectTopic(topicId);
-        tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      });
+      tab.addEventListener("click", () => selectTopic(topicId));
 
       topicTabs.appendChild(tab);
     });
+
+    revealActiveTab(topicTabs);
   }
 
   // Drag a tab to rearrange your dashboard. Trending is pinned first.

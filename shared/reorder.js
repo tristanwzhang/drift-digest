@@ -156,3 +156,17 @@ function enableTabReorder({ container, itemSelector, isFixed, onReorder }) {
     view.addEventListener("pointercancel", onUp, true);
   });
 }
+
+// Bring the selected tab into view. Reopening Drift on Design, eighth in the
+// strip, used to show the strip from the start with no selected tab in sight.
+// Scrolls the strip only — scrollIntoView could also scroll the page the
+// floating bubble sits on.
+function revealActiveTab(strip) {
+  const tab = strip.querySelector('[aria-selected="true"]');
+  if (!tab) return;
+  const box = strip.getBoundingClientRect();
+  const it = tab.getBoundingClientRect();
+  const margin = 28;   // clear of the strip's faded edge
+  if (it.left < box.left + margin) strip.scrollLeft -= box.left + margin - it.left;
+  else if (it.right > box.right - margin) strip.scrollLeft += it.right - (box.right - margin);
+}
