@@ -61,7 +61,7 @@ from two of the six Trending slots to one, without touching any other signal.
 
 **A quiet day is a real answer.** There's no quota. A story has to clear a
 quality bar to be shown; a busy topic shows up to eight, a slow one may show
-none, and says so plainly instead of padding.
+none, and says so plainly instead of padding. Nothing beats mid.
 
 **It remembers you.** Stories you opened drop out. Stories shown repeatedly and
 ignored fall behind newer ones. Clustering runs across all your topics at once,

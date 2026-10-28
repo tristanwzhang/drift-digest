@@ -25,11 +25,13 @@ const POOL_PER_TOPIC = STORIES_PER_TAB + 4;
 // What a story has to score to be shown at all. A tab holds every story that
 // clears it, up to STORIES_PER_TAB, and none if none do — a fixed three meant
 // a slow topic padded itself with "UX Disciplines: Glossary" while a busy one
-// hid its fourth-best story. 5 is what an ordinary outlet's own lead earns in
-// its first few hours; anything less needs another outlet, a scoop, or a
-// bigger newsroom behind it. Trending asks more, after weighting by where the
-// topic sits on your dashboard.
-const STORY_FLOOR = 5;
+// hid its fourth-best story. At 5 — an ordinary outlet's own lead in its
+// first few hours — the bottom of a thin tab was "Roller coaster safety is a
+// matter of science" and an advertorial on industrial intelligence. At 6 a
+// lone story needs a reputable newsroom leading with it, or a second outlet, a
+// scoop, or real stakes. Nothing beats mid. Trending asks more, after
+// weighting by where the topic sits on your dashboard.
+const STORY_FLOOR = 6;
 const TRENDING_FLOOR = 8;
 // Two days. Long enough to cover a day you didn't open the browser; short
 // enough that nothing here is old news. A slow topic goes quiet sooner than

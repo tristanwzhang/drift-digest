@@ -76,9 +76,12 @@ Recency alone surfaces filler, so:
   never by the presence of one character, so a quoted foreign name survives
 - **editorial standing** scales both agreement and feed placement, because
   agreement alone rewards commodity news (see below)
-- **no quota**: a story must score **5** to be shown — what an ordinary
-  outlet's own lead earns in its first few hours; anything less needs another
-  outlet, a scoop, or a bigger newsroom. A tab shows up to **8**, and may show
+- **no quota**: a story must score **6** to be shown. At 5 — what an
+  ordinary outlet's own lead earns in its first few hours — the bottom of thin
+  tabs was "Roller coaster safety is a matter of science", a fiber-supplement
+  study and an advertorial; at 6 a lone story needs a reputable newsroom
+  leading with it, or another outlet, a scoop, or real stakes. Busy tabs
+  (World, Finance) are unaffected — they have 20+ stories above it. A tab shows up to **8**, and may show
   **none** — an honest "Quiet in X today" beats filler. A fixed three had a
   slow topic padding with "UX Disciplines: Glossary" while a busy one hid its
   fourth-best story
