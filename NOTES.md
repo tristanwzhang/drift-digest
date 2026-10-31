@@ -220,6 +220,12 @@ The popup borrows from front pages rather than from apps:
 
 The bubble gets the same treatment minus pictures (see shared/story.js).
 
+Settings shelves its 23 topics the way a newsstand does (News & money,
+Technology, Science, Culture, Life) and says under each who it reads. The two
+display modes are drawn, not described. "Saved" and the permission notice are
+toasts pinned to the window — they used to appear at the end of a long page,
+out of sight of whatever you'd just changed.
+
 ## Parsing
 
 MV3 service workers have no DOM, so there's no `DOMParser`. `background.js`

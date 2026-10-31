@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Drift — Topics</title>
+  <title>Drift — Settings</title>
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-  <div class="wrap">
+  <main class="wrap">
     <header class="page-header">
       <div class="brand">
         <img class="brand-mark" src="../icons/icon128.png" alt="" width="128" height="128" />
         Drift
       </div>
       <h1>What do you want to keep up with?</h1>
-      <p class="subtitle">Drift keeps two or three fresh headlines per topic, one click away. Pick a few below — Chrome will ask permission for each topic's news sources, and Drift reads nothing else.</p>
+      <p class="subtitle">Only the stories worth your time in each topic you follow — up to eight, or none on a quiet day. Chrome asks permission for each topic's sources, and Drift reads nothing else.</p>
     </header>
 
     <div class="upgrade-row" id="upgradeRow" hidden>
@@ -24,83 +24,123 @@
       <button class="primary-btn" id="upgradeBtn">Allow</button>
     </div>
 
-    <h2 class="section-title">Your topics</h2>
-    <div class="topic-grid" id="topicGrid"></div>
+    <section class="topics-section">
+      <div class="section-head">
+        <h2 class="section-title">Your topics</h2>
+        <span class="section-count" id="topicCount"></span>
+      </div>
+      <div class="topic-grid" id="topicGrid"></div>
+    </section>
 
     <section class="health-section" id="healthSection" hidden>
-      <h2 class="section-title">Sources that stopped answering</h2>
+      <div class="section-head">
+        <h2 class="section-title">Sources that stopped answering</h2>
+      </div>
       <p class="health-intro">Publishers move or retire their feeds without telling anyone. Drift keeps asking, just less often, and uses the rest of the topic in the meantime.</p>
       <ul class="health-list" id="healthList"></ul>
       <button class="ghost-btn" id="recheckBtn">Check again now</button>
     </section>
 
     <section class="mode-section">
-      <h2 class="section-title">Where it lives</h2>
+      <div class="section-head">
+        <h2 class="section-title">Where it lives</h2>
+      </div>
       <div class="mode-grid">
         <button class="mode-card" data-mode="bubble">
-          <span class="mode-glyph mode-glyph--bubble"></span>
+          <svg class="mode-art" viewBox="0 0 160 92" aria-hidden="true">
+            <rect class="art-window" x="1" y="1" width="158" height="90" rx="8" />
+            <path class="art-bar" d="M1 17h158" />
+            <circle class="art-dot" cx="11" cy="9" r="2.2" /><circle class="art-dot" cx="18.5" cy="9" r="2.2" /><circle class="art-dot" cx="26" cy="9" r="2.2" />
+            <rect class="art-line" x="14" y="30" width="78" height="5" rx="2.5" />
+            <rect class="art-line" x="14" y="42" width="96" height="5" rx="2.5" />
+            <rect class="art-line" x="14" y="54" width="64" height="5" rx="2.5" />
+            <circle class="art-accent" cx="140" cy="56" r="9" />
+          </svg>
           <span class="mode-copy">
-            <span class="mode-name">Floating bubble</span>
+            <span class="mode-name">Floating bubble <span class="check"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span></span>
             <span class="mode-desc">Rides along on the page. Drag it anywhere, or past the edge to tuck it away.</span>
           </span>
-          <span class="check">&#10003;</span>
         </button>
         <button class="mode-card" data-mode="toolbar">
-          <span class="mode-glyph mode-glyph--toolbar"></span>
+          <svg class="mode-art" viewBox="0 0 160 92" aria-hidden="true">
+            <rect class="art-window" x="1" y="1" width="158" height="90" rx="8" />
+            <path class="art-bar" d="M1 17h158" />
+            <circle class="art-dot" cx="11" cy="9" r="2.2" /><circle class="art-dot" cx="18.5" cy="9" r="2.2" /><circle class="art-dot" cx="26" cy="9" r="2.2" />
+            <rect class="art-line" x="14" y="30" width="78" height="5" rx="2.5" />
+            <rect class="art-line" x="14" y="42" width="96" height="5" rx="2.5" />
+            <rect class="art-line" x="14" y="54" width="64" height="5" rx="2.5" />
+            <rect class="art-accent" x="142" y="4.5" width="9" height="9" rx="2.5" />
+            <rect class="art-popup" x="96" y="21" width="58" height="52" rx="5" />
+            <rect class="art-line" x="103" y="30" width="38" height="4" rx="2" />
+            <rect class="art-line" x="103" y="39" width="44" height="4" rx="2" />
+            <rect class="art-line" x="103" y="48" width="30" height="4" rx="2" />
+          </svg>
           <span class="mode-copy">
-            <span class="mode-name">Toolbar icon</span>
+            <span class="mode-name">Toolbar icon <span class="check"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg></span></span>
             <span class="mode-desc">Nothing on the page. Click the Drift icon in your Chrome toolbar instead.</span>
           </span>
-          <span class="check">&#10003;</span>
         </button>
       </div>
     </section>
 
-    <section class="daily-section">
-      <h2 class="section-title">Reading</h2>
-      <div class="toggle-row">
-        <div class="toggle-copy">
-          <p class="toggle-title">Show pictures</p>
-          <p class="toggle-desc">The photo each outlet chose for its story, loaded from that outlet. Never shown in the floating bubble, where the page you're on could see it.</p>
+    <section class="settings-section">
+      <div class="section-head">
+        <h2 class="section-title">Reading</h2>
+      </div>
+      <div class="settings-group">
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <p class="toggle-title">Show pictures</p>
+            <p class="toggle-desc">The photo each outlet chose for its story, loaded from that outlet. Never shown in the floating bubble, where the page you're on could see it.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="imagesToggle" />
+            <span class="slider"></span>
+          </label>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="imagesToggle" />
-          <span class="slider"></span>
-        </label>
       </div>
     </section>
 
-    <section class="daily-section">
-      <h2 class="section-title">Daily check-in</h2>
-      <div class="toggle-row">
-        <div class="toggle-copy">
-          <p class="toggle-title">Open the digest once a day</p>
-          <p class="toggle-desc">The first time you use the browser each day, Drift shows you what's new. Once a day, never more.</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="dailyToggle" />
-          <span class="slider"></span>
-        </label>
+    <section class="settings-section">
+      <div class="section-head">
+        <h2 class="section-title">Daily check-in</h2>
       </div>
-
-      <div class="toggle-row" id="startHourRow">
-        <div class="toggle-copy">
-          <p class="toggle-title">Start my day at</p>
-          <p class="toggle-desc">Drift won't open itself before this. Working past midnight counts as the night before, not a new day.</p>
+      <div class="settings-group">
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <p class="toggle-title">Open the digest once a day</p>
+            <p class="toggle-desc">The first time you use the browser each day, Drift shows you what's new. Once a day, never more.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="dailyToggle" />
+            <span class="slider"></span>
+          </label>
         </div>
-        <select class="hour-select" id="startHour">
-          <option value="5">5 AM</option>
-          <option value="6">6 AM</option>
-          <option value="7">7 AM</option>
-          <option value="8">8 AM</option>
-          <option value="9">9 AM</option>
-          <option value="10">10 AM</option>
-        </select>
+
+        <div class="toggle-row" id="startHourRow">
+          <div class="toggle-copy">
+            <p class="toggle-title">Start my day at</p>
+            <p class="toggle-desc">Drift won't open itself before this. Working past midnight counts as the night before, not a new day.</p>
+          </div>
+          <select class="hour-select" id="startHour">
+            <option value="5">5 AM</option>
+            <option value="6">6 AM</option>
+            <option value="7">7 AM</option>
+            <option value="8">8 AM</option>
+            <option value="9">9 AM</option>
+            <option value="10">10 AM</option>
+          </select>
+        </div>
       </div>
     </section>
 
-    <p class="saved-hint" id="savedHint">Saved</p>
-  </div>
+    <footer class="page-footer">
+      <span>Drift <span id="version"></span></span>
+      <span>No account, no servers, no analytics. Your reading history stays on this device.</span>
+    </footer>
+  </main>
+
+  <p class="saved-hint" id="savedHint" role="status">Saved</p>
 
   <script src="../shared/data.js"></script>
   <script src="options.js"></script>
