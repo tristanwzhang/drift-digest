@@ -22,9 +22,12 @@ function paywallTag() {
   return tag;
 }
 
-function markOpenedOnClick(link, url) {
+// meta says where in the digest the click happened — position in the list, and
+// whether it was an update, a developing story, or on Trending. Counted per
+// day on this device, so the digest can be tuned from what is actually read.
+function markOpenedOnClick(link, url, meta = {}) {
   link.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "MARK_OPENED", url });
+    chrome.runtime.sendMessage({ type: "MARK_OPENED", url, meta });
   });
 }
 
@@ -124,28 +127,45 @@ const COVERAGE_BADGE_FROM = 3;
 
 // lead controls size only. The "new" marker comes from the article's own
 // freshness, so a slow topic's lead never claims to be new when it isn't.
-function storyKicker(tags, outlets) {
+// "Update" and "Developing" are set apart from the topic names because they
+// say something about the story, not where it sits: you've read an earlier
+// version of this, or desks are still piling onto it.
+function kickerFlag(text, title) {
+  const flag = document.createElement("span");
+  flag.className = "kicker-flag";
+  flag.textContent = text;
+  flag.title = title;
+  return flag;
+}
+
+function storyKicker({ tags = [], outlets = 0, developing = false, update = false } = {}) {
   const showReach = outlets >= COVERAGE_BADGE_FROM;
-  if (!tags.length && !showReach) return null;
+  if (!tags.length && !showReach && !developing && !update) return null;
 
   const kicker = document.createElement("p");
   kicker.className = "story-kicker";
+  const parts = [];
 
-  tags.forEach((label, index) => {
-    if (index) kicker.appendChild(document.createTextNode(" · "));
+  tags.forEach((label) => {
     const tag = document.createElement("span");
     tag.className = "kicker-topic";
     tag.textContent = label;
-    kicker.appendChild(tag);
+    parts.push(tag);
   });
-
+  if (update) parts.push(kickerFlag("Update", "New reporting on a story you read"));
+  if (developing) parts.push(kickerFlag("Developing", "Outlets are still filing on this"));
   if (showReach) {
     const reach = document.createElement("span");
     reach.className = "kicker-reach";
-    reach.textContent = (tags.length ? " · " : "") + outlets + " outlets";
+    reach.textContent = outlets + " outlets";
     reach.title = outlets + " outlets are covering this";
-    kicker.appendChild(reach);
+    parts.push(reach);
   }
+
+  parts.forEach((part, index) => {
+    if (index) kicker.appendChild(document.createTextNode(" · "));
+    kicker.appendChild(part);
+  });
   return kicker;
 }
 
@@ -162,7 +182,12 @@ function renderStory(article, { lead = false, images = false, tags = [], rank = 
   story.rel = "noopener noreferrer";
   story.title = article.title;
   story.style.setProperty("--i", String(index));
-  markOpenedOnClick(story, article.url);
+  markOpenedOnClick(story, article.url, {
+    rank: index,
+    upd: Boolean(article.update),
+    dev: Boolean(article.developing),
+    tr: tags.length > 0,
+  });
 
   const text = document.createElement("div");
   text.className = "story-text";
@@ -170,7 +195,12 @@ function renderStory(article, { lead = false, images = false, tags = [], rank = 
   // Above the headline, where a front page puts its kicker: which section it
   // belongs to (on Trending, where sections mix) and how big the story is.
   // The meta row is already full on a narrow card.
-  const kicker = storyKicker(tags, article.eventOutlets || 0);
+  const kicker = storyKicker({
+    tags,
+    outlets: article.eventOutlets || 0,
+    developing: Boolean(article.developing),
+    update: Boolean(article.update),
+  });
 
   const headline = document.createElement("p");
   headline.className = "story-title";
@@ -205,6 +235,16 @@ function renderStory(article, { lead = false, images = false, tags = [], rank = 
     numeral.setAttribute("aria-hidden", "true");
     story.classList.add("is-ranked");
     story.prepend(numeral);
+  }
+
+  if (article.update) {
+    const follows = document.createElement("p");
+    follows.className = "story-follows";
+    const added = article.update.added;
+    follows.textContent = added > 0
+      ? `Since you read “${article.update.title}” — ${added} more outlet${added === 1 ? "" : "s"}`
+      : `Follows “${article.update.title}”`;
+    text.appendChild(follows);
   }
 
   // Not every feed ships one — Hacker News, for instance, has nothing useful.

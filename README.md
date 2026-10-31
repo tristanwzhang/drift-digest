@@ -59,6 +59,14 @@ own order doesn't just rearrange tabs — it tells Trending how much each one is
 worth. Measured on one day's feeds, moving sports from first to last took it
 from two of the six Trending slots to one, without touching any other signal.
 
+**It notices what you read.** A story you opened comes back marked "Update" when
+the story moves on, rather than vanishing because you'd already read about it.
+"Developing" marks a story outlets are still filing on right now. It learns
+which outlets you tend to open and lets them lead a little more often — it only
+reorders stories that already made the cut. All of it stays on the device, is
+shown back to you in Settings, and can be erased. Optional alerts fire for the
+very biggest stories only: at most one a day, never overnight, off by default.
+
 **A quiet day is a real answer.** There's no quota. A story has to clear a
 quality bar to be shown; a busy topic shows up to eight, a slow one may show
 none, and says so plainly instead of padding. Nothing beats mid.

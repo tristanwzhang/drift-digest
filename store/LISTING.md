@@ -48,6 +48,16 @@ day — once, never more — so keeping up doesn't depend on remembering to.
 Prefer it on the page instead of the toolbar? Drift can float as a small bubble
 you drag anywhere, or tuck off the edge of the screen until you want it back.
 
+**It notices what you read**
+
+- A story you opened comes back marked "Update" when it moves on, instead of
+  vanishing because you'd already read about it
+- "Developing" marks a story outlets are still filing on right now
+- It learns which outlets you tend to open and lets them lead a little more
+  often — never changing which stories make the cut. Off with one switch
+- Optional alerts for the very biggest stories: at most one a day, never
+  overnight. Off by default
+
 **Private by construction**
 
 No account, no servers, no analytics. Drift fetches public RSS feeds straight
@@ -72,6 +82,11 @@ user enables it. Not used otherwise.
 **Optional host permissions (news domains)** — fetches public RSS feeds from
 the publishers behind the topics the user selected. Requested per topic, at the
 moment the topic is chosen, never at install.
+
+**Optional `notifications`** — shows a notification for a very large story
+(ten or more outlets on it, most filing within hours), at most once a day and
+never overnight. Off by default; requested only when the user switches alerts
+on in Settings.
 
 **Optional `<all_urls>`** — required only for the optional floating bubble,
 which draws its panel over the current page. Requested only when the user

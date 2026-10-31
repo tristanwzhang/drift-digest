@@ -122,6 +122,7 @@ chrome.storage.sync.get(
     // deliberately a minute later shows everything.
     unprompted = Date.now() - local.unprompted_open < 120000;
     if (unprompted) chrome.storage.local.remove("unprompted_open");
+    chrome.runtime.sendMessage({ type: "METRIC", kind: "open", unprompted });
 
     render(synced.selected_topics, local.articles);
 

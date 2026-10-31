@@ -1,7 +1,7 @@
 // Service worker: fetches the feeds, normalizes them, caches the result.
 // The panel and popup only ever read from that cache, so opening is instant.
 
-importScripts("shared/data.js");
+importScripts("shared/data.js", "worker/engagement.js");
 
 const REFRESH_MINUTES = 30;
 // How stale the cache may be before opening the panel triggers a fetch.
@@ -88,6 +88,10 @@ const LOW_VALUE = new RegExp([
   "\\b(nba|nfl|mlb|nhl|ncaa|college football|college basketball) picks\\b",
   // Archives and asides: a closed live blog, a clip, a quiz about the news.
   "\\bas it happened\\b", "^watch:", "^quiz:", "\\((video|podcast|audio)\\)$",
+  // A match or a market in progress. Audited against two days of live
+  // headlines: every hit was a live blog, a stream link or a scorecard.
+  "(^|[:\u2013\u2014-]\\s*)live\\b\\s*([\u2013\u2014:-]|$)",
+  "\\blive (blog|updates|coverage|stream|scorecard)\\b", "\\bmatchday live\\b",
   "^news wrap:", "^who said it\\b", "\\b(news|daily) quiz\\b",
   "\\bnewsletter:", "^here.s the latest\\.?$",
 ].join("|"), "i");
@@ -483,8 +487,16 @@ function cluster(items) {
       .map((member) => ({
         source: member.source,
         url: member.url,
+        at: member.publishedAt,
         ...(member.paywall ? { paywall: true } : {}),
       }));
+
+    // Which outlets filed on this story lately, counted before the list above
+    // is cut to five: an event's pace is the number of desks working it right
+    // now, and the five earliest are exactly the wrong five to count.
+    const filedRecent = [...bySource.values()]
+      .filter((member) => ageHours(member.publishedAt) <= DEVELOPING_WINDOW_H)
+      .map((member) => member.source);
 
     // The earliest report leads — but never let a recap speak for the story
     // it recaps. If any outlet filed the real thing, that's the one shown.
@@ -514,6 +526,7 @@ function cluster(items) {
       summary,
       agreement: Number(agreement.toFixed(3)),
       corroboration: Math.max(1, independent.size),
+      filedRecent,
       feedPosition: c.bestPosition,
       fresh: ageHours(lead.publishedAt) < FRESH_HOURS,
       topics: c.topics,
@@ -761,6 +774,15 @@ const HEAT_FROM = 3;
 // Other angles shown beneath the lead of a big event.
 const RELATED_MAX = 2;
 
+// A story is developing while desks are still piling onto it: enough outlets
+// to be an event at all, and most of them filing within the last few hours.
+// Stateless on purpose — it works from the publication times in the feeds, so
+// it is right on the first refresh after a week away, which a before-and-after
+// comparison against a stored count would not be.
+const DEVELOPING_WINDOW_H = 3;
+const DEVELOPING_MIN_OUTLETS = 5;
+const DEVELOPING_MIN_RECENT = 4;
+
 function outletsOf(story) {
   return story.coverage ? story.coverage.map((entry) => entry.source) : [story.source];
 }
@@ -815,6 +837,10 @@ function withEvents(stories) {
 
   const outlets = events.map((members) =>
     new Set(members.flatMap((index) => outletsOf(stories[index]))).size);
+  // Outlets with something on the event inside the window, across all of it.
+  const recent = events.map((members) =>
+    new Set(members.flatMap((index) => stories[index].filedRecent || [])).size);
+
   // How much of the event was filed under each topic, for Trending's tags.
   const reach = events.map((members) => {
     const counts = {};
@@ -854,6 +880,9 @@ function withEvents(stories) {
       score: story.score + heat,
       event: id,
       eventOutlets: size,
+      eventRecent: recent[id],
+      ...(size >= DEVELOPING_MIN_OUTLETS && recent[id] >= DEVELOPING_MIN_RECENT
+        ? { developing: true } : {}),
       eventTopics: reach[id],
       ...(related.length ? { related } : {}),
     };
@@ -1216,6 +1245,20 @@ function homeEvents(grouped, order, home = eventHomes(grouped, order)) {
   return out;
 }
 
+async function afterRefresh(ranked, only) {
+  try {
+    await queued(async () => {
+      const { followed } = await chrome.storage.local.get({ followed: [] });
+      await chrome.storage.local.set({ followed: growFollowed(ranked, followed) });
+    });
+    // A refresh for one topic reuses cached feeds for the rest, so it is
+    // not a fresh look at the news; leave alerts to full ones.
+    if (!only) await maybeAlert(ranked);
+  } catch (error) {
+    console.warn("[Drift] post-refresh bookkeeping failed:", error?.message);
+  }
+}
+
 async function topicStamps() {
   const { topic_fetched_at: stamps } = await chrome.storage.local.get({ topic_fetched_at: {} });
   return stamps;
@@ -1304,7 +1347,14 @@ async function doRefresh(only, fromCache) {
   );
 
   const order = topics.map((topic) => topic.id);
-  const rankedAll = rank(fetched.flat());
+
+  // Stories you opened that have since moved on come back as updates, in place
+  // of the story you read; see worker/engagement.js.
+  const memory = await chrome.storage.local.get({ followed: [], opened_urls: {}, reading_stats: { sources: {} } });
+  const learning = await learningOn();
+  const affinity = learning ? sourceAffinity(memory.reading_stats) : {};
+  const ranked = rank(fetched.flat());
+  const rankedAll = applyUpdates(ranked, findUpdates(ranked, memory.followed, memory.opened_urls));
   const assigned = assignToTopics(rankedAll, order);
   const homes = eventHomes(assigned, order);
   const grouped = homeEvents(assigned, order, homes);
@@ -1319,7 +1369,12 @@ async function doRefresh(only, fromCache) {
   });
   articles[TRENDING_ID] = buildTrending(rankedAll, order, homes);
   order.forEach((id) => {
-    const good = onePerEvent(grouped[id] || []).filter((story) => story.score >= STORY_FLOOR);
+    // The bar applies to the score as ranked; what you tend to read only
+    // reorders what already cleared it.
+    const good = orderByAffinity(
+      onePerEvent(grouped[id] || []).filter((story) => story.score >= STORY_FLOOR),
+      affinity
+    );
     articles[id] = interleaveBySource(good, POOL_PER_TOPIC)
       // `topics` carries one entry per source article so assignment can count
       // them; it has done its job by now and shouldn't bloat the cache.
@@ -1334,6 +1389,10 @@ async function doRefresh(only, fromCache) {
 
   await chrome.storage.local.set(stamp);
   await updateBadge(articles);
+
+  // Only a refresh that went to the network has anything new to remember or
+  // announce; re-ranking from cache would alert about the same hour twice.
+  if (!fromCache) await afterRefresh(ranked, only);
   return articles;
 }
 
@@ -1408,6 +1467,10 @@ async function markSeen(urls) {
   const { seen_urls: seen } = await chrome.storage.local.get({ seen_urls: {} });
   const now = Date.now();
 
+  // First sightings only: the same story on screen all afternoon is one story
+  // shown, not thirty.
+  const firstSight = urls.filter((url) => !seen[url]);
+
   for (const url of urls) {
     const previous = seen[url];
     seen[url] = { n: (previous?.n || 0) + 1, t: now };
@@ -1415,14 +1478,21 @@ async function markSeen(urls) {
 
   await chrome.storage.local.set({ seen_urls: prune(seen) });
   await updateBadge();
+  if (firstSight.length) {
+    await bumpMetrics({ shown: firstSight.length });
+    await learnShown(firstSight);
+  }
 }
 
-async function markOpened(url) {
+async function markOpened(url, meta) {
   if (!url) return;
   const { opened_urls: opened } = await chrome.storage.local.get({ opened_urls: {} });
   opened[url] = { t: Date.now() };
   await chrome.storage.local.set({ opened_urls: prune(opened) });
   await updateBadge();
+  await recordClick(url, meta);
+  await learnOpened(url);
+  await followOpened(url);
 }
 
 // ---------- what's actually worth your attention ----------
@@ -1476,17 +1546,21 @@ async function openDigest() {
   await chrome.storage.local.set({ unprompted_open: Date.now() });
 
   // openPopup() needs a focused window and can be refused; the tab always works.
+  let failure = null;
   try {
     await chrome.action.openPopup();
+    await recordAutoOpen("popup");
     return "popup";
   } catch (error) {
-    console.warn("[Drift] openPopup unavailable:", error?.message);
+    failure = error?.message || String(error);
+    console.warn("[Drift] openPopup unavailable:", failure);
   }
 
   await chrome.tabs.create({
     url: chrome.runtime.getURL("daily/daily.html"),
     active: true,
   });
+  await recordAutoOpen("tab", failure);
   return "tab";
 }
 
@@ -1611,14 +1685,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // bubble may run, so react to both.
 chrome.permissions.onAdded.addListener(() => {
   syncBubbleScript();
+  bindNotificationClicks();
   refresh();
 });
+
+bindNotificationClicks();
 chrome.permissions.onRemoved.addListener(() => {
   syncBubbleScript();
   refresh();
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "OPEN_OPTIONS") {
     chrome.runtime.openOptionsPage();
     return false;
@@ -1635,7 +1712,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "MARK_OPENED") {
-    markOpened(message.url);
+    markOpened(message.url, message.meta);
+    return false;
+  }
+
+  if (message?.type === "METRIC" && message.kind === "open") {
+    recordOpen(sender, Boolean(message.unprompted));
     return false;
   }
 

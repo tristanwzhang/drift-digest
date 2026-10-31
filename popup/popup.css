@@ -624,3 +624,25 @@ body {
 .sk-thumb { width: 64px; height: 64px; border-radius: 8px; }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+/* ---------- Labels that say something about the story ---------- */
+.kicker-flag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.cover-text .kicker-flag { background: rgba(231,201,143,0.2); color: #F0D9A8; }
+.story-follows {
+  margin: -2px 0 8px;
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.story-kicker { line-height: 1.55; }
+.story-kicker > span { white-space: nowrap; }

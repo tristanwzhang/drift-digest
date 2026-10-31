@@ -1,6 +1,6 @@
 # Drift — Privacy Policy
 
-_Last updated: 28 October 2026_
+_Last updated: 31 October 2026_
 
 Drift is a browser extension that shows a short digest of news headlines from
 publishers you choose. This policy describes exactly what it stores and what it
@@ -22,6 +22,11 @@ Stored locally in your browser (`chrome.storage.local`), never transmitted:
 | Reading history — links you opened, and how many times a headline has been displayed | So you aren't shown the same story repeatedly |
 | Which topic tab you last viewed | So the digest reopens where you left it |
 | Floating bubble position, if you use it | So it stays where you put it |
+| Per-day counts: how many times Drift was opened (and how many of those it opened itself), how many stories you opened, and which position in the list they were | So you can see your own use in Settings, and so the digest can be tuned from what is actually read. Counts only — no titles, no links |
+| For each outlet: how many of its stories were shown to you, and how many you opened | So outlets you tend to open can lead a little more often. It reorders stories that already made the cut and never decides which ones do. Can be switched off in Settings |
+| Titles and links of stories you opened in the last 48 hours | So that a follow-up to something you read can be marked "Update". Dropped after 48 hours |
+| Which big stories have already triggered an alert, kept 72 hours | So the same story isn't announced twice |
+| The time and method of the last 20 automatic daily openings | So Settings can tell you whether the check-in opened as a popup or a tab |
 | The date the daily check-in last ran | So it runs once a day, not repeatedly |
 
 Reading history is pruned automatically: at most 500 entries, and nothing
@@ -36,6 +41,8 @@ syncs between your own signed-in Chrome installations:
 | Whether you use the toolbar icon or the floating bubble | Same |
 | Whether the daily check-in is on | Same |
 | Whether pictures are shown | Same |
+| Whether Drift learns which outlets you open | Same |
+| Whether alerts are on | Same |
 
 Synced data is handled by Chrome under Google's privacy policy. Drift does not
 read it from anywhere other than your own browser.
@@ -58,6 +65,14 @@ isn't told where the request came from. Pictures are never loaded in the
 floating bubble, because the bubble sits inside other websites, and a website
 can see which images are loaded into its pages. You can turn pictures off in
 Drift's settings; with them off, opening the digest sends no request to anyone.
+
+None of the counts above is sent anywhere. Settings shows them to you, and
+"Erase these numbers" deletes them.
+
+**Notifications, if you turn alerts on.** Alerts use Chrome's notifications
+permission, which Drift asks for only at the moment you switch alerts on. They
+are drawn on your device from what Drift has already fetched; nothing is
+requested from anyone to show one.
 
 Publishers can see these requests as they would any web request, including your
 IP address. Drift sends them no information about you, your other topics, or

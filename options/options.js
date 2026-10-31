@@ -3,6 +3,8 @@ const savedHint = document.getElementById("savedHint");
 const modeCards = Array.from(document.querySelectorAll(".mode-card"));
 const dailyToggle = document.getElementById("dailyToggle");
 const imagesToggle = document.getElementById("imagesToggle");
+const learnToggle = document.getElementById("learnToggle");
+const alertsToggle = document.getElementById("alertsToggle");
 const startHour = document.getElementById("startHour");
 const upgradeRow = document.getElementById("upgradeRow");
 const upgradeTitle = document.getElementById("upgradeTitle");
@@ -158,6 +160,8 @@ function persist() {
       daily_open: dailyToggle.checked,
       day_starts_at: Number(startHour.value),
       show_images: imagesToggle.checked,
+      learn_on: learnToggle.checked,
+      alerts_on: alertsToggle.checked,
     },
     showSavedHint
   );
@@ -165,6 +169,24 @@ function persist() {
 
 dailyToggle.addEventListener("change", persist);
 imagesToggle.addEventListener("change", persist);
+learnToggle.addEventListener("change", () => { persist(); refreshStats(); });
+
+// Notifications are an optional permission: asked for here, when someone asks
+// for alerts, and not at install. request() has to be the first thing that
+// happens in the handler or Chrome refuses the prompt.
+alertsToggle.addEventListener("change", () => {
+  if (!alertsToggle.checked) {
+    persist();
+    return;
+  }
+  chrome.permissions.request({ permissions: ["notifications"] }, (granted) => {
+    if (!granted) {
+      alertsToggle.checked = false;
+      showNotice("Alerts need permission to show notifications. Nothing else is read.");
+    }
+    persist();
+  });
+});
 startHour.addEventListener("change", persist);
 
 function renderModes() {
@@ -309,9 +331,17 @@ chrome.storage.sync.get(
     daily_open: true,
     day_starts_at: DAY_STARTS_AT_HOUR,
     show_images: DEFAULT_SHOW_IMAGES,
+    learn_on: DEFAULT_LEARN,
+    alerts_on: false,
   },
   (data) => {
     imagesToggle.checked = data.show_images;
+    learnToggle.checked = data.learn_on;
+    // The switch can say on while Chrome has since withdrawn the permission.
+    chrome.permissions.contains({ permissions: ["notifications"] }, (granted) => {
+      alertsToggle.checked = data.alerts_on && granted;
+    });
+    refreshStats();
     selectedTopics = new Set(data.selected_topics);
     displayMode = data.display_mode;
     dailyToggle.checked = data.daily_open;
@@ -324,3 +354,124 @@ chrome.storage.sync.get(
 );
 
 document.getElementById("version").textContent = chrome.runtime.getManifest().version;
+
+// ---------- the numbers, shown back ----------
+//
+// Everything below is read from this browser's own storage; see the privacy
+// policy for what is kept. Counting is only worth doing if the person can see
+// it, and wipe it.
+const STAT_DAYS = 14;
+
+function lastDays(count) {
+  const days = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const pad = (n) => String(n).padStart(2, "0");
+    days.push({ key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, date: d });
+  }
+  return days;
+}
+
+function statCard(value, label, note) {
+  const card = document.createElement("div");
+  card.className = "stat";
+  const number = document.createElement("p");
+  number.className = "stat-value";
+  number.textContent = value;
+  const caption = document.createElement("p");
+  caption.className = "stat-label";
+  caption.textContent = label;
+  card.append(number, caption);
+  if (note) card.title = note;
+  return card;
+}
+
+function renderStats({ metrics, stats, dailyLog, learning }) {
+  const days = lastDays(STAT_DAYS).map((day) => ({ ...day, m: metrics[day.key] || {} }));
+  const sum = (key) => days.reduce((n, day) => n + (day.m[key] || 0), 0);
+
+  const visits = sum("open_auto") + sum("open_manual");
+  const reads = sum("clicks");
+  const fired = sum("auto_fired");
+  const engaged = sum("auto_engaged");
+  const ranks = Array.from({ length: 10 }, (_, i) => sum("r" + i));
+  const ranked = ranks.reduce((n, v) => n + v, 0);
+
+  const grid = document.getElementById("statGrid");
+  grid.textContent = "";
+  grid.append(
+    statCard(String(visits), "visits"),
+    statCard(String(reads), "stories read"),
+    statCard(visits ? (reads / visits).toFixed(1) : "—", "reads per visit"),
+    statCard(
+      fired ? `${engaged} of ${fired}` : "—",
+      "check-ins that led to a read",
+      "Opened by Drift itself, then a story read within fifteen minutes"
+    )
+  );
+
+  const peak = Math.max(1, ...days.map((day) => Math.max(
+    (day.m.open_auto || 0) + (day.m.open_manual || 0), day.m.clicks || 0)));
+  const bars = document.getElementById("statBars");
+  bars.textContent = "";
+  for (const day of days) {
+    const v = (day.m.open_auto || 0) + (day.m.open_manual || 0);
+    const r = day.m.clicks || 0;
+    const col = document.createElement("div");
+    col.className = "stat-day";
+    col.title = `${day.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ` +
+      `${v} visit${v === 1 ? "" : "s"}, ${r} read${r === 1 ? "" : "s"}`;
+    for (const [className, n] of [["bar-visits", v], ["bar-reads", r]]) {
+      const bar = document.createElement("span");
+      bar.className = "stat-bar " + className;
+      bar.style.height = Math.max(n ? 6 : 2, Math.round((n / peak) * 100)) + "%";
+      col.appendChild(bar);
+    }
+    bars.appendChild(col);
+  }
+
+  const sources = document.getElementById("statSources");
+  const top = Object.entries(stats?.sources || {})
+    .filter(([, entry]) => entry.o >= 3)
+    .sort((a, b) => b[1].o - a[1].o)
+    .slice(0, 3)
+    .map(([name]) => name);
+  sources.textContent = !learning
+    ? "Learning is off, so Drift isn't tracking which outlets you open."
+    : top.length
+      ? `You open most: ${top.join(", ")}.` + (ranked >= 10 ? ` ${Math.round((ranks[0] / ranked) * 100)}% of your reads are the top story.` : "")
+      : "Not enough reading yet to say which outlets you prefer.";
+
+  const checkin = document.getElementById("statCheckin");
+  const last = (dailyLog || []).at(-1);
+  checkin.textContent = !last
+    ? "The automatic daily check-in hasn't fired yet."
+    : last.via === "popup"
+      ? "The last automatic check-in opened as a popup."
+      : "The last automatic check-in opened as a tab" +
+        (last.error ? " — Chrome wouldn't open the popup on its own." : ".");
+}
+
+async function refreshStats() {
+  const [local, synced] = await Promise.all([
+    chrome.storage.local.get({ metrics: {}, reading_stats: { sources: {} }, daily_log: [] }),
+    chrome.storage.sync.get({ learn_on: DEFAULT_LEARN }),
+  ]);
+  renderStats({
+    metrics: local.metrics,
+    stats: local.reading_stats,
+    dailyLog: local.daily_log,
+    learning: synced.learn_on,
+  });
+}
+
+document.getElementById("eraseBtn").addEventListener("click", async () => {
+  await chrome.storage.local.remove(["metrics", "reading_stats", "followed", "daily_log", "auto_open"]);
+  refreshStats();
+  showNotice("Erased. Drift starts counting again from now.");
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && (changes.metrics || changes.reading_stats || changes.daily_log)) refreshStats();
+});

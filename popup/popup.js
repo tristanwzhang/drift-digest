@@ -293,6 +293,7 @@ chrome.storage.sync.get(
         // Only an open Drift initiated, and only once.
         unprompted = Date.now() - local.unprompted_open < 120000;
         if (unprompted) chrome.storage.local.remove("unprompted_open");
+        chrome.runtime.sendMessage({ type: "METRIC", kind: "open", unprompted });
 
         showUpdated(local.fetched_at);
         render(synced.selected_topics, local.active_topic, local.articles, {

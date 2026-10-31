@@ -134,6 +134,50 @@
       </div>
     </section>
 
+    <section class="settings-section">
+      <div class="section-head">
+        <h2 class="section-title">Smarter over time</h2>
+      </div>
+      <div class="settings-group">
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <p class="toggle-title">Learn what I read</p>
+            <p class="toggle-desc">Drift notices which outlets you tend to open and lets them lead a little more often. It only reorders stories that already made the cut — never which ones do. Kept on this device.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="learnToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <p class="toggle-title">Alert me to huge stories</p>
+            <p class="toggle-desc">A notification only when ten or more outlets are on the same story and most of them filed in the last few hours. At most one a day, never overnight, never for something you've already read. Chrome will ask to allow notifications.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="alertsToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-section" id="statsSection">
+      <div class="section-head">
+        <h2 class="section-title">Your Drift</h2>
+        <span class="section-count">last 14 days</span>
+      </div>
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="stat-bars" id="statBars" role="img" aria-label="Visits and reads per day"></div>
+      <div class="stat-legend"><span class="key key-visits"></span>visits <span class="key key-reads"></span>stories read</div>
+      <p class="stat-note" id="statSources"></p>
+      <p class="stat-note" id="statCheckin"></p>
+      <div class="stat-foot">
+        <p class="stat-privacy">Counted in this browser and nowhere else — there is no server for it to go to. Nothing about which stories you read is kept, only how many, and which outlets.</p>
+        <button class="ghost-btn" id="eraseBtn">Erase these numbers</button>
+      </div>
+    </section>
+
     <footer class="page-footer">
       <span>Drift <span id="version"></span></span>
       <span>No account, no servers, no analytics. Your reading history stays on this device.</span>

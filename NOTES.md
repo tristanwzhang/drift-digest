@@ -28,7 +28,8 @@ store/              privacy policy and Chrome Web Store listing copy
 ## Permissions
 
 Nothing broad is requested at install. `storage`, `alarms` and `scripting`
-produce no warning prompt. Every host sits in `optional_host_permissions`:
+produce no warning prompt. `notifications` is an `optional_permission`, asked
+for only when someone switches alerts on. Every host sits in `optional_host_permissions`:
 selecting a topic requests access to that topic's publishers, and choosing the
 floating bubble requests page access and registers the content script at
 runtime. A toolbar-only install never asks for page access at all.
@@ -49,6 +50,11 @@ so opening the digest is instant and works offline on the last batch.
 | `active_topic` | local | last tab viewed |
 | `bubble_pos` / `bubble_docked` | local | bubble placement, per device |
 | `last_daily_open` | local | date the check-in last fired |
+| `learn_on` / `alerts_on` | sync | learning from reading; alerts (off by default) |
+| `metrics` | local | per-day counts: visits (auto/manual), reads, read positions, check-ins and whether they led to a read |
+| `reading_stats` | local | per outlet: stories shown, stories opened (decays) |
+| `followed` | local | stories opened in the last 48h: urls, vocabulary, outlets at the time |
+| `alert_log` / `daily_log` | local | alerts sent (72h); the last 20 automatic openings and how |
 
 ### Refresh
 
@@ -198,6 +204,48 @@ browser activity on a new calendar date, watched from startup, window focus,
 tab activation and the alarm. It tries `chrome.action.openPopup()` and falls
 back to opening `daily/daily.html` in a tab.
 
+## Engagement
+
+`worker/engagement.js`, all on-device. Each of these was built against measured
+behaviour, and the unit tests and a simulation of the service worker (fake
+browser, controllable clock, a real day of feeds) cover them.
+
+- **Developing**: an event with at least 5 outlets, 4 of which filed inside the
+  last 3 hours. Stateless — read off publication times, so it's right on the
+  first refresh after a week away, which a before/after comparison of stored
+  counts would not be. On the busy day it flagged exactly one of 25 events
+  (Israel's election, at exit-poll time) and not the IPO story that had broken
+  earlier. Two days' data is thin; the thresholds are a first answer
+- **Following a story you read**: opening a story used to hide its whole event
+  (one story per event per list), so the day coalition talks began Drift said
+  nothing about Israel. Opened stories are followed for 48h. Two ways back,
+  marked "Update" with a line saying what it follows: the same event gaining 2+
+  outlets and a new story; or a *new* event of 4+ outlets that shares the
+  followed event's vocabulary (two words, one a name, rare enough). The second
+  case is the common one: an election night and its coalition talks are
+  different events with different headlines. Found by simulation — the first
+  version matched events by URL only and missed it
+- **Learning**: per outlet, stories shown vs opened, smoothed toward the overall
+  rate so three opens of a rarely-shown outlet isn't devotion, capped at ±1.5
+  points against a bar of 6. Applied after the bar, to order only: it cannot
+  lift a story over the bar or hide one under it. Known bias: lead cards are
+  bigger, so outlets that tend to lead get opened more for that reason
+- **Measuring**: counts per day, kept 45 days: visits (automatic/manual, by
+  surface), reads, which list position was read, and whether an automatic
+  check-in was followed by a read within 15 minutes. Settings shows them back
+  and can erase them. The check-in log also records how it opened (popup or
+  tab) and why the popup failed, which finally answers whether
+  `openPopup()` works at cold start — once it has run in a real browser
+- **Alerts**: off by default; 10+ outlets with 5+ filed in the last 3 hours;
+  one a day; none before the day starts or after 22:00; never the same event
+  twice; never for something already read; never for a live blog. Frequency in
+  real use is not yet known (the simulated busy day had three events over 10
+  outlets, only one still moving) — `alert_sent` in the counts will say
+
+All writes go through one queue: opening a story sends several messages at
+once and each store is read-modified-written, so without it two of them lose
+a change.
+
 ## Look
 
 The popup borrows from front pages rather than from apps:
@@ -262,7 +310,14 @@ picture after resizing: 82KB.
 
 ## Testing
 
-No test runner. Logic is checked with throwaway harnesses that eval the real
-functions out of `background.js` against a fake `chrome` API or live feeds —
-that's how the daily check-in's race condition was caught (three triggers firing
-in the same tick opened three popups). Worth making permanent if this grows.
+```
+node tests/unit.mjs
+```
+
+No framework. `tests/load.mjs` evals the real `background.js` and
+`worker/engagement.js` with `chrome` stubbed, so the tests run the shipping
+code, not a copy. Unit tests cover alert selection and outlet affinity. The
+heavier check — the whole service worker in a fake browser with a controllable
+clock and a day of real feed XML — found the follow-up gap and the daily
+check-in's race condition (three triggers firing in the same tick opened three
+popups), but depends on a multi-megabyte feed snapshot that isn't kept here.

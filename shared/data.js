@@ -389,6 +389,10 @@ const DEFAULT_TOPIC_IDS = ["ai", "startups", "design"];
 // a request all the same, so it's a setting rather than a given.
 const DEFAULT_SHOW_IMAGES = true;
 
+// Learning which outlets you tend to open is on by default and kept on this
+// device; alerts are off until asked for, because they interrupt.
+const DEFAULT_LEARN = true;
+
 // "toolbar" keeps the page clean and lives in the Chrome toolbar;
 // "bubble" floats a draggable button over the page.
 const DEFAULT_DISPLAY_MODE = "toolbar";

@@ -335,6 +335,15 @@
       color: var(--accent);
     }
     .story-kicker .kicker-topic ~ .kicker-reach { color: var(--text-dim); }
+    .story-kicker { line-height: 1.55; }
+    .story-kicker > span { white-space: nowrap; }
+    .kicker-flag {
+      padding: 1px 6px; border-radius: 4px; background: var(--accent-dim); color: var(--accent);
+    }
+    .story-follows {
+      margin: -2px 0 8px; font-size: 11.5px; font-style: italic; line-height: 1.45; color: var(--text-dim);
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
     .story-related { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 18px 10px; margin-top: -3px; }
     .related-angle {
       display: flex;
@@ -710,7 +719,9 @@
   function isOpen() { return panel.getAttribute("data-open") === "true"; }
 
   function setOpen(open) {
+    const opening = open && !isOpen();
     panel.setAttribute("data-open", String(open));
+    if (opening) chrome.runtime.sendMessage({ type: "METRIC", kind: "open", unprompted: false });
     if (open) {
       tickClock();
       placePanel();
