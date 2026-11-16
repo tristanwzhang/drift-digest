@@ -5,6 +5,20 @@ const D = load();
 let bad = 0;
 const check = (name, ok, detail = "") => { if (!ok) bad++; console.log((ok ? "  ok   " : "  FAIL ") + name + (detail ? "  — " + detail : "")); };
 
+console.log("article excerpts");
+const title = "A new night train crosses the Alps";
+const detail = "The overnight route links three cities and carries bicycles.";
+const body = "Passengers can book a berth from next month. " + detail.repeat(4);
+function excerpt(description, content) {
+  const xml = `<item><title>${title}</title><link>https://example.org/rail</link>
+    <description>${description}</description><content:encoded>${content}</content:encoded></item>`;
+  return D.parseFeed(xml, "Travel")[0].summary;
+}
+check("uses the publisher's synopsis before long body copy", excerpt(detail, body) === detail);
+check("falls back from a repeated headline to a complete sentence", excerpt(title, body).endsWith("."));
+check("removes a headline repeated before the synopsis", excerpt(title + ". " + detail, "") === detail);
+check("keeps paragraph boundaries readable", excerpt("<p>Tickets go on sale.</p><p>Bookings open Friday.</p>", "") === "Tickets go on sale. Bookings open Friday.");
+
 console.log("source affinity");
 const none = D.sourceAffinity({ sources: { A: { s: 30, o: 3 }, B: { s: 30, o: 3 } } });
 check("too few opens overall → no opinion", Object.keys(none).length === 0);

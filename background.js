@@ -177,29 +177,31 @@ function pickLink(block) {
   return clean(pickTag(block, "guid"));
 }
 
-// A one-line lead, taken from whatever the feed offers.
+// Prefer the publisher's synopsis. Use body copy when the synopsis is
+// missing, repeats the headline, or contains only a link to the article.
+const summarySentences = new Intl.Segmenter("en", { granularity: "sentence" });
 function pickSummary(block, title) {
-  let best = "";
+  const normalize = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   for (const tag of ["description", "summary", "content:encoded", "content"]) {
-    const text = clean(pickTag(block, tag));
-    if (text.length > best.length) best = text;
+    const raw = pickTag(block, tag).replace(/<\/?(?:p|div|br)\b[^>]*>/gi, " ");
+    let text = clean(raw).replace(/(?:^|\s)(?:read more|continue reading)(?:\s*[.→…]+)?$/i, "").trim();
+    if (text.toLowerCase().startsWith(title.toLowerCase()) && /^\s*(?:[.!?—–:]|$)/.test(text.slice(title.length))) {
+      text = text.slice(title.length).replace(/^[.!?—–:\s]+/, "");
+    }
+    if (text.length < 30 || normalize(text) === normalize(title)) continue;
+    if (text.length <= SUMMARY_MAX) return text;
+
+    let end = 0;
+    for (const sentence of summarySentences.segment(text)) {
+      const next = sentence.index + sentence.segment.trimEnd().length;
+      if (next > SUMMARY_MAX) break;
+      end = next;
+    }
+    if (end >= 30) return text.slice(0, end);
+    const cut = text.slice(0, SUMMARY_MAX - 1).replace(/\s+\S*$/, "");
+    return cut.replace(/[\s,.;:—-]+$/, "") + "…";
   }
-
-  if (!best) return "";
-
-  // Some feeds just repeat the headline; that's noise, not context.
-  const normalize = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (normalize(best).startsWith(normalize(title)) && best.length < title.length * 1.4) {
-    return "";
-  }
-  if (best.length < 30) return "";
-
-  if (best.length <= SUMMARY_MAX) return best;
-
-  // cut on a word boundary so it reads as a sentence trailing off
-  const cut = best.slice(0, SUMMARY_MAX);
-  const lastSpace = cut.lastIndexOf(" ");
-  return (lastSpace > SUMMARY_MAX * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:—-]+$/, "") + "…";
+  return "";
 }
 
 // The picture the outlet chose for its own story. Feeds offer it several ways

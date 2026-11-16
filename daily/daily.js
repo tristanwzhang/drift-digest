@@ -2,6 +2,7 @@ const digest = document.getElementById("digest");
 const dateline = document.getElementById("dateline");
 const greeting = document.getElementById("greeting");
 const stopDailyBtn = document.getElementById("stopDailyBtn");
+const topicNav = document.getElementById("topicNav");
 let lastRender = { topicIds: [], articles: {} };
 
 let history = { opened: {}, seen: {} };
@@ -26,6 +27,8 @@ function renderTopic(topic, pool) {
 
   const label = document.createElement("h2");
   label.className = "topic-label";
+  label.id = "topic-" + topic.id;
+  label.tabIndex = -1;
   label.textContent = topic.label;
   section.appendChild(label);
 
@@ -48,6 +51,7 @@ function renderTopic(topic, pool) {
   }
 
   digest.appendChild(section);
+  return articles;
 }
 
 function render(topicIds, articles) {
@@ -56,6 +60,17 @@ function render(topicIds, articles) {
 
   // Trending leads the morning read, same as in the panel.
   const topics = tabOrder(topicIds, articles).map(getTopic).filter(Boolean);
+
+  topicNav.replaceChildren();
+  topicNav.hidden = topics.length < 2;
+  if (!topicNav.hidden) {
+    for (const topic of topics) {
+      const link = document.createElement("a");
+      link.href = "#topic-" + topic.id;
+      link.textContent = topic.label;
+      topicNav.appendChild(link);
+    }
+  }
 
   if (topics.length === 0) {
     const empty = document.createElement("div");
@@ -76,7 +91,8 @@ function render(topicIds, articles) {
     return;
   }
 
-  const shown = topics.flatMap((topic) => pickStories(articles[topic.id], history, STORIES_PER_TAB));
+  heldBack = [];
+  const shown = topics.flatMap((topic) => renderTopic(topic, articles[topic.id]));
   const fresh = shown.filter((article) => article.fresh).length;
 
   chrome.runtime.sendMessage({
@@ -85,8 +101,6 @@ function render(topicIds, articles) {
   });
   greeting.textContent = fresh === 0 ? "A quiet one today" : "Here's what's new";
 
-  heldBack = [];
-  topics.forEach((topic) => renderTopic(topic, articles[topic.id]));
 
   if (heldBack.length) {
     const row = document.createElement("button");
