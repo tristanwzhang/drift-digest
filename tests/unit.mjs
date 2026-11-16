@@ -19,6 +19,25 @@ check("falls back from a repeated headline to a complete sentence", excerpt(titl
 check("removes a headline repeated before the synopsis", excerpt(title + ". " + detail, "") === detail);
 check("keeps paragraph boundaries readable", excerpt("<p>Tickets go on sale.</p><p>Bookings open Friday.</p>", "") === "Tickets go on sale. Bookings open Friday.");
 
+console.log("lead report selection");
+const report = (source, hour, summary, extra = {}) => ({
+  source, title, url: "https://example.org/" + source, summary,
+  publishedAt: new Date(T - (12 - hour) * 3600000).toISOString(), topicId: "world", ...extra,
+});
+const early = report("First", 1, "");
+const repeat = report("Echo", 2, title);
+const fuller = report("Rail", 3, detail, { title: title + " tonight", paywall: true });
+const [lead] = D.rank([early, repeat, fuller]);
+check("the informative report supplies every part of its preview",
+  lead.url === fuller.url && lead.title === fuller.title && lead.summary === detail && lead.source === fuller.source && lead.paywall);
+check("equally informative reports favor the first to publish",
+  D.rank([report("Later", 4, detail), fuller])[0].url === fuller.url);
+const recap = report("Recap", 2, detail, { lowValue: true });
+const primary = D.rank([early, recap])[0];
+check("a recap cannot supply the lead or lend its excerpt", primary.url === early.url && !primary.summary);
+const packed = D.rank([...Array.from({ length: 6 }, (_, i) => report("Desk" + i, i, "")), fuller])[0];
+check("later leads remain in capped outlet coverage", packed.coverage.length === 5 && packed.coverage.some((r) => r.url === fuller.url));
+
 console.log("source affinity");
 const none = D.sourceAffinity({ sources: { A: { s: 30, o: 3 }, B: { s: 30, o: 3 } } });
 check("too few opens overall → no opinion", Object.keys(none).length === 0);

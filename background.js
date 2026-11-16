@@ -436,6 +436,19 @@ function ageHours(isoDate) {
   return (Date.now() - new Date(isoDate).getTime()) / 3.6e6;
 }
 
+// A synopsis earns preference when it gives the reader information beyond
+// the headline. Count distinct words, not length, so repetition adds nothing.
+function leadDetail(report) {
+  const summary = report.summary?.trim();
+  if (!summary || /^(?:read (?:more|the full (?:story|article))|click here|continue reading)\b/i.test(summary)) return 0;
+  const headline = titleTokens(report.title);
+  const additions = [...titleTokens(summary)].filter((word) => !headline.has(word));
+  const numbers = report.title.match(/\d+(?:[.,]\d+)*/g) || [];
+  const newFigure = (summary.match(/\d+(?:[.,]\d+)*/g) || []).some((n) => !numbers.includes(n));
+  if (newFigure || additions.length >= 3) return 2;
+  return additions.length ? 1 : 0;
+}
+
 // Collapse the same story reported by several sources into one item, and
 // remember how many sources carried it — agreement is the strongest signal
 // we can get without a model.
@@ -483,9 +496,23 @@ function cluster(items) {
       }
     }
 
-    const coverage = [...bySource.values()]
-      .sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt))
-      .slice(0, MAX_SOURCES_PER_STORY)
+    const reporting = c.members.filter((member) => !member.lowValue);
+    const candidates = reporting.length ? reporting : c.members;
+    let lead = candidates[0];
+    let bestDetail = leadDetail(lead);
+    for (const member of candidates.slice(1)) {
+      const detail = leadDetail(member);
+      if (detail > bestDetail || (detail === bestDetail && Date.parse(member.publishedAt) < Date.parse(lead.publishedAt))) {
+        lead = member;
+        bestDetail = detail;
+      }
+    }
+
+    // Coverage includes the chosen report even if it arrived after the cap.
+    const byDate = (a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt);
+    const alternatives = [...bySource.values()].filter((member) => member.source !== lead.source);
+    const coverage = [lead, ...alternatives.sort(byDate).slice(0, MAX_SOURCES_PER_STORY - 1)]
+      .sort(byDate)
       .map((member) => ({
         source: member.source,
         url: member.url,
@@ -500,19 +527,6 @@ function cluster(items) {
       .filter((member) => ageHours(member.publishedAt) <= DEVELOPING_WINDOW_H)
       .map((member) => member.source);
 
-    // The earliest report leads — but never let a recap speak for the story
-    // it recaps. If any outlet filed the real thing, that's the one shown.
-    const reporting = c.members.filter((member) => !member.lowValue);
-    const candidates = reporting.length ? reporting : c.members;
-    const lead = candidates.reduce((earliest, member) =>
-      new Date(member.publishedAt) < new Date(earliest.publishedAt) ? member : earliest
-    );
-
-    // If it shipped no summary, borrow one from another outlet rather than
-    // showing a bare headline.
-    const summary =
-      lead.summary || c.members.find((member) => member.summary)?.summary || "";
-
     // Agreement counted by who agrees, not merely how many. Every outlet
     // beyond the strongest one carrying the story adds its own standing, so
     // two wire-copy blogs agreeing is worth less than two desks agreeing.
@@ -525,7 +539,6 @@ function cluster(items) {
 
     return {
       ...lead,
-      summary,
       agreement: Number(agreement.toFixed(3)),
       corroboration: Math.max(1, independent.size),
       filedRecent,
