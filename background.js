@@ -1538,8 +1538,8 @@ async function updateBadge(articles) {
 
   try {
     await chrome.action.setBadgeText({ text: count ? String(count) : "" });
-    await chrome.action.setBadgeBackgroundColor({ color: "#C7A97B" });
-    await chrome.action.setBadgeTextColor({ color: "#2A2418" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#C62828" });
+    await chrome.action.setBadgeTextColor({ color: "#FFFFFF" });
   } catch (error) {
     // badge APIs are best-effort; never let them break a refresh
   }

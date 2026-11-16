@@ -93,8 +93,8 @@
       height: 17px;
       padding: 0 5px;
       border-radius: 999px;
-      background: #C7A97B;
-      color: #2A2418;
+      background: #C62828;
+      color: #FFFFFF;
       font-family: var(--code);
       font-size: 9.5px;
       font-weight: 500;
